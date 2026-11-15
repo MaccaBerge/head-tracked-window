@@ -72,7 +72,9 @@ files exist.
 
 - **Head tracking**: MediaPipe Pose Landmarker in the browser finds the viewer,
   locks onto one person, and estimates eye position and distance from body
-  proportions (`src/headTracker.ts`). In the mirror and particle rooms,
+  proportions. Tracking runs in a web worker, so the room keeps drawing at the
+  display's rate however long the models take (`src/trackerWorker.ts`,
+  `src/trackerCore.ts`). In the mirror and particle rooms,
   MediaPipe Hand Landmarker tells an open hand, a pointing finger and a fist
   apart (`src/handTracker.ts`). The particle room runs its simulation on the
   GPU in float textures (`src/particles.ts`).
