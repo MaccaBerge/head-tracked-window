@@ -1,3 +1,4 @@
+import { AQUARIUM_DEFAULTS, type AquariumSettings } from "./aquarium";
 import { BALL_DEFAULTS, type BallSettings } from "./balls";
 import { CUBE_DEFAULTS, type CubeRoomSettings } from "./cubeRoom";
 import type { Placement } from "./rooms";
@@ -22,7 +23,7 @@ export interface DisplayProfile {
   cameraTiltDeg: number;
 }
 
-export interface Settings extends CubeRoomSettings, BallSettings {
+export interface Settings extends CubeRoomSettings, BallSettings, AquariumSettings {
   /** The view follows the viewer's head (or the mouse). Off: a fixed view straight ahead. */
   followHead: boolean;
   /** Single-letter keyboard shortcuts (H, F, M, P). Can be turned off (WCAG 2.1.4). */
@@ -92,6 +93,7 @@ function defaults(): Settings {
     figureSize: 1,
     ...CUBE_DEFAULTS,
     ...BALL_DEFAULTS,
+    ...AQUARIUM_DEFAULTS,
     // For people who've asked their system for less motion, the cube walls start still.
     cubeMotion: prefersReducedMotion() ? "none" : CUBE_DEFAULTS.cubeMotion,
     cubePalettes: {},

@@ -63,7 +63,14 @@ export interface CubeRoomConfig {
   name: string;
 }
 
-export type RoomConfig = GridRoomConfig | CubeRoomConfig | SplatRoomConfig;
+/** A fish tank behind the glass (see aquarium.ts). */
+export interface AquariumRoomConfig {
+  type: "aquarium";
+  id: string;
+  name: string;
+}
+
+export type RoomConfig = GridRoomConfig | CubeRoomConfig | AquariumRoomConfig | SplatRoomConfig;
 
 /** Rooms built in real metres around the window, rather than loaded scenes. */
 export function isBoxRoom(c: RoomConfig): c is GridRoomConfig | CubeRoomConfig {
@@ -74,6 +81,7 @@ export function isBoxRoom(c: RoomConfig): c is GridRoomConfig | CubeRoomConfig {
 export const ROOMS: RoomConfig[] = [
   { type: "grid", id: "grid", name: "Grid room" },
   { type: "cubes", id: "cubes", name: "Cube room" },
+  { type: "aquarium", id: "aquarium", name: "Aquarium" },
   {
     type: "splat",
     id: "fireplace",

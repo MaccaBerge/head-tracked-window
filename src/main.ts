@@ -30,6 +30,7 @@ import {
   createIcons,
 } from "lucide";
 import * as THREE from "three";
+import { AQUA_SCENES, WATER_STYLES, createAquarium, type AquariumSettings } from "./aquarium";
 import { BALL_COLOUR_MODES, BallSystem, type BallSettings } from "./balls";
 import { MirrorFigure } from "./figure";
 import {
@@ -178,12 +179,14 @@ function rebuild(): void {
       splatRoom = null;
       const depth = win.width * settings.roomDepth;
       room =
-        config.type === "cubes"
-          ? createCubeRoom(win.width, win.height, depth, settings)
-          : createGridRoom(win.width, win.height, depth, settings.showObjects);
+        config.type === "aquarium"
+          ? createAquarium(win.width, win.height, settings)
+          : config.type === "cubes"
+            ? createCubeRoom(win.width, win.height, depth, settings)
+            : createGridRoom(win.width, win.height, depth, settings.showObjects);
     }
     if (room) scene.add(room.group);
-    // Rooms can bring their own haze and background.
+    // Rooms like the aquarium bring their own haze and background.
     scene.fog = room?.fog ?? null;
     scene.background = room?.background ?? DEFAULT_BACKGROUND;
     if (import.meta.env.DEV) Object.assign(window, { room, tracker, balls });
@@ -452,6 +455,8 @@ function syncHud(): void {
   el.gridOptions.hidden = !isBoxRoom(config);
   el.objectsRow.hidden = config.type !== "grid";
   el.cubeOptions.hidden = config.type !== "cubes";
+  aquariumOptions.hidden = config.type !== "aquarium";
+  syncTankControls();
   el.cubeMode.value = settings.cubeColourMode;
   buildPaletteEditor();
   el.cubeSpeed.value = String(settings.cubeSpeed);
@@ -796,6 +801,114 @@ el.cubeLayout.addEventListener("change", () => {
   el.cubeLayout.blur();
   commit();
 });
+// ---------- Aquarium ----------
+type NumericTankKey = { [K in keyof AquariumSettings]: AquariumSettings[K] extends number ? K : never }[keyof AquariumSettings];
+type SwitchTankKey = { [K in keyof AquariumSettings]: AquariumSettings[K] extends boolean ? K : never }[keyof AquariumSettings];
+const aquariumOptions = $("aquarium-options");
+const waterSelect = $<HTMLSelectElement>("in-water");
+for (const w of WATER_STYLES) waterSelect.add(new Option(w.name, w.id));
+const aquaSceneSelect = $<HTMLSelectElement>("in-aqua-scene");
+for (const sc of AQUA_SCENES) aquaSceneSelect.add(new Option(sc.name, sc.id));
+aquaSceneSelect.addEventListener("change", () => {
+  const scene = AQUA_SCENES.find((sc) => sc.id === aquaSceneSelect.value);
+  if (scene) settings.aquaScene = scene.id;
+  showReefOptions();
+  aquaSceneSelect.blur();
+  commit();
+});
+const tankSliders = [...document.querySelectorAll<HTMLInputElement>('input[type="range"][data-tank]')];
+const tankSwitches = [...document.querySelectorAll<HTMLInputElement>('input[type="checkbox"][data-tank]')];
+const formatTankValue: Record<NumericTankKey, (v: number) => string> = {
+  tankWidth: times,
+  tankHeight: times,
+  tankDepth: times,
+  fishCount: (v) => String(Math.round(v)),
+  fishSize: times,
+  fishSpeed: times,
+  fishSchooling: percent,
+  fishWander: percent,
+  fishAgility: percent,
+  fishCuriosity: percent,
+  fishStartle: percent,
+  fishExplore: percent,
+  waterDeep: percent,
+  shipSize: times,
+  reefRocks: times,
+  reefRockHeight: times,
+  reefEnclose: percent,
+  reefCoral: times,
+  reefCoralSize: times,
+  reefGlow: percent,
+  reefSway: times,
+  causticStrength: times,
+  causticSize: times,
+  causticSharpness: percent,
+  causticSpeed: times,
+  causticDetail: percent,
+  causticCurve: percent,
+  sailTears: percent,
+  sailTearSize: times,
+  sailTearDetail: percent,
+  sailFray: percent,
+  sailRips: percent,
+  sailWear: percent,
+  sailSway: times,
+  sailPattern: (v) => String(Math.round(v) + 1),
+};
+/** Settings that change the tank itself, so it's rebuilt; the rest are read live. */
+const rebuildsTank = new Set<string>([
+  "tankDepth",
+  "tankWidth",
+  "tankHeight",
+  "waterDeep",
+  "shipSize",
+  "reefRocks",
+  "reefRockHeight",
+  "reefEnclose",
+  "reefCoral",
+  "reefCoralSize",
+]);
+/** The reef, wreck and sail settings only apply to the shipwreck scene. */
+function showReefOptions(): void {
+  for (const el of document.querySelectorAll<HTMLElement>(".wreck-only")) el.hidden = settings.aquaScene === "tank";
+}
+function showTankValue(slider: HTMLInputElement): void {
+  const key = slider.dataset.tank as NumericTankKey;
+  const out = slider.parentElement?.querySelector("output");
+  if (out) out.textContent = formatTankValue[key](settings[key]);
+}
+function syncTankControls(): void {
+  waterSelect.value = settings.water;
+  aquaSceneSelect.value = settings.aquaScene;
+  showReefOptions();
+  for (const slider of tankSliders) {
+    slider.value = String(settings[slider.dataset.tank as NumericTankKey]);
+    showTankValue(slider);
+  }
+  for (const toggle of tankSwitches) toggle.checked = settings[toggle.dataset.tank as SwitchTankKey];
+}
+for (const slider of tankSliders) {
+  slider.addEventListener("input", () => {
+    const key = slider.dataset.tank as NumericTankKey;
+    settings[key] = parseFloat(slider.value);
+    showTankValue(slider);
+    if (rebuildsTank.has(key)) commitSoon();
+    else saveSettings(settings);
+  });
+}
+for (const toggle of tankSwitches) {
+  toggle.addEventListener("change", () => {
+    settings[toggle.dataset.tank as SwitchTankKey] = toggle.checked;
+    saveSettings(settings);
+  });
+}
+waterSelect.addEventListener("change", () => {
+  const style = WATER_STYLES.find((w) => w.id === waterSelect.value);
+  if (style) settings.water = style.id;
+  waterSelect.blur();
+  commit();
+});
+
 // ---------- Balls ----------
 type NumericBallKey = { [K in keyof BallSettings]: BallSettings[K] extends number ? K : never }[keyof BallSettings];
 type SwitchBallKey = { [K in keyof BallSettings]: BallSettings[K] extends boolean ? K : never }[keyof BallSettings];
