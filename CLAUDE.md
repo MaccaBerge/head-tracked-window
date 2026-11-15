@@ -58,7 +58,8 @@ npm run build          # type check + production build
   `rebuild()` (`main.ts`), its panel section shown or hidden in `syncHud()`.
 - **Tracking**: `headTracker.ts` (pose model, sticky lock on one person,
   OneEuro filtering, optional person cutout). `handTracker.ts` (hand model,
-  palm / point / fist) runs only in the mirror room. Both lazy-load MediaPipe.
+  palm / point / fist) runs only in the mirror and particle rooms. Both
+  lazy-load MediaPipe. The particle room also turns on the person cutout.
 - Splat rooms lazy-load Spark; keep heavy libraries out of the first download.
 
 ## Settings and panel

@@ -50,6 +50,12 @@ browser's warning about the certificate. Settings are kept per browser.
 - **Fogged mirror**: your reflection (the webcam) in a steamed-up mirror. Wipe
   it clear with an open hand or draw in it with one finger (or the mouse); the
   fog creeps back, frost grows in from the edges, and drops run down the glass.
+- **Particle mirror**: a cloud of dust that gathers into your outline, coloured
+  by the webcam, with some relief. An open hand blows the particles away, a fist
+  pulls them into a spinning ball that bursts when you open it, and one finger
+  draws a sparkler trail (the mouse pushes and pulls too). Moving fast smears
+  you; Shatter breaks you apart. Colours can be the camera's, one tint, or a
+  heat glow.
 - **Splat rooms**: Gaussian splat scenes (`.ply`, `.spz`, `.splat`, `.ksplat`,
   `.sog`). Drag a file onto the page to add it, or put it in `public/splats/`
   and add an entry in `src/rooms.ts`. Placement behind the window is adjusted in
@@ -66,8 +72,10 @@ files exist.
 
 - **Head tracking**: MediaPipe Pose Landmarker in the browser finds the viewer,
   locks onto one person, and estimates eye position and distance from body
-  proportions (`src/headTracker.ts`). In the mirror room, MediaPipe Hand
-  Landmarker tells an open hand from a pointing finger (`src/handTracker.ts`).
+  proportions (`src/headTracker.ts`). In the mirror and particle rooms,
+  MediaPipe Hand Landmarker tells an open hand, a pointing finger and a fist
+  apart (`src/handTracker.ts`). The particle room runs its simulation on the
+  GPU in float textures (`src/particles.ts`).
 - **Off-axis projection**: the camera frustum is fitted to the physical screen
   from the eye position (`src/offAxis.ts`), with display size and webcam
   position stored per display profile.
