@@ -63,7 +63,34 @@ export interface CubeRoomConfig {
   name: string;
 }
 
-export type RoomConfig = GridRoomConfig | CubeRoomConfig | SplatRoomConfig;
+/** A fish tank behind the glass (see aquarium.ts). */
+export interface AquariumRoomConfig {
+  type: "aquarium";
+  id: string;
+  name: string;
+}
+
+/** A fogged-up mirror showing the webcam (see mirror.ts). */
+export interface MirrorRoomConfig {
+  type: "mirror";
+  id: string;
+  name: string;
+}
+
+/** Particles that gather into the viewer (see particles.ts). */
+export interface ParticleRoomConfig {
+  type: "particles";
+  id: string;
+  name: string;
+}
+
+export type RoomConfig =
+  | GridRoomConfig
+  | CubeRoomConfig
+  | AquariumRoomConfig
+  | MirrorRoomConfig
+  | ParticleRoomConfig
+  | SplatRoomConfig;
 
 /** Rooms built in real metres around the window, rather than loaded scenes. */
 export function isBoxRoom(c: RoomConfig): c is GridRoomConfig | CubeRoomConfig {
@@ -74,6 +101,9 @@ export function isBoxRoom(c: RoomConfig): c is GridRoomConfig | CubeRoomConfig {
 export const ROOMS: RoomConfig[] = [
   { type: "grid", id: "grid", name: "Grid room" },
   { type: "cubes", id: "cubes", name: "Cube room" },
+  { type: "aquarium", id: "aquarium", name: "Aquarium" },
+  { type: "mirror", id: "mirror", name: "Fogged mirror" },
+  { type: "particles", id: "particles", name: "Particle mirror" },
   {
     type: "splat",
     id: "fireplace",

@@ -92,6 +92,327 @@
 
       <!-- Cube room -->
       <!-- Aquarium -->
+      <section id="aquarium-options" class="group">
+        <h2 class="group-label">Scene</h2>
+        <label class="row"><span>Scene</span><select id="in-aqua-scene"></select></label>
+        <label class="row"><span>Water</span><select id="in-water"></select></label>
+        <details id="sec-aqua-water" class="fold">
+          <summary><i data-lucide="chevron-right"></i>Water and light</summary>
+          <div class="section">
+            <label class="row" title="How deep down it feels: deeper is dimmer and cosier, and the coral glows">
+              <span>Deep</span>
+              <span class="slider"><input data-tank="waterDeep" type="range" min="0" max="1" step="0.05" /><output></output></span>
+            </label>
+            <label class="row"><span>Glowing specks</span><input data-tank="tankPlankton" type="checkbox" class="switch" role="switch" /></label>
+            <label class="row"><span>Bubbles</span><input data-tank="tankBubbles" type="checkbox" class="switch" role="switch" /></label>
+            <label class="row"><span>Light rays</span><input data-tank="tankLightRays" type="checkbox" class="switch" role="switch" /></label>
+          </div>
+        </details>
+        <details id="sec-aqua-patterns" class="fold">
+          <summary><i data-lucide="chevron-right"></i>Light patterns</summary>
+          <div class="section">
+            <label class="row" title="How bright the rippling sunlight is on the sand and the surface">
+              <span>Brightness</span>
+              <span class="slider"><input data-tank="causticStrength" type="range" min="0" max="2" step="0.05" /><output></output></span>
+            </label>
+            <label class="row">
+              <span>Size</span>
+              <span class="slider"><input data-tank="causticSize" type="range" min="0.3" max="3" step="0.05" /><output></output></span>
+            </label>
+            <label class="row" title="Low gives soft, wide bands; high gives thin, crisp lines">
+              <span>Sharpness</span>
+              <span class="slider"><input data-tank="causticSharpness" type="range" min="0" max="1" step="0.05" /><output></output></span>
+            </label>
+            <label class="row">
+              <span>Speed</span>
+              <span class="slider"><input data-tank="causticSpeed" type="range" min="0" max="3" step="0.05" /><output></output></span>
+            </label>
+            <label class="row" title="How much of a finer second net of lines shows">
+              <span>Detail</span>
+              <span class="slider"><input data-tank="causticDetail" type="range" min="0" max="1" step="0.05" /><output></output></span>
+            </label>
+            <label class="row" title="Low keeps the lines straighter; high bends them into smooth curves">
+              <span>Curviness</span>
+              <span class="slider"><input data-tank="causticCurve" type="range" min="0" max="1" step="0.05" /><output></output></span>
+            </label>
+          </div>
+        </details>
+        <details id="reef-options" class="fold wreck-only">
+          <summary><i data-lucide="chevron-right"></i>Reef and wreck</summary>
+          <div class="section">
+            <label class="row">
+              <span>Ship size</span>
+              <span class="slider"><input data-tank="shipSize" type="range" min="0.5" max="1.8" step="0.05" /><output></output></span>
+            </label>
+            <label class="row" title="How much rock there is">
+              <span>Rocks</span>
+              <span class="slider"><input data-tank="reefRocks" type="range" min="0" max="2" step="0.1" /><output></output></span>
+            </label>
+            <label class="row">
+              <span>Rock height</span>
+              <span class="slider"><input data-tank="reefRockHeight" type="range" min="0.3" max="2" step="0.05" /><output></output></span>
+            </label>
+            <label class="row" title="How much the rocks close in around the scene: walls beyond the sides, behind the wreck, and ledges above">
+              <span>Enclosure</span>
+              <span class="slider"><input data-tank="reefEnclose" type="range" min="0" max="1" step="0.05" /><output></output></span>
+            </label>
+            <label class="row" title="How much coral grows on the rocks and sand">
+              <span>Coral</span>
+              <span class="slider"><input data-tank="reefCoral" type="range" min="0" max="2" step="0.1" /><output></output></span>
+            </label>
+            <label class="row">
+              <span>Coral size</span>
+              <span class="slider"><input data-tank="reefCoralSize" type="range" min="0.4" max="2" step="0.05" /><output></output></span>
+            </label>
+            <label class="row">
+              <span>Coral glow</span>
+              <span class="slider"><input data-tank="reefGlow" type="range" min="0" max="1" step="0.05" /><output></output></span>
+            </label>
+            <label class="row" title="How much the soft coral and sea fans sway">
+              <span>Coral sway</span>
+              <span class="slider"><input data-tank="reefSway" type="range" min="0" max="2" step="0.05" /><output></output></span>
+            </label>
+          </div>
+        </details>
+        <details id="sec-aqua-sails" class="fold wreck-only">
+          <summary><i data-lucide="chevron-right"></i>Sails</summary>
+          <div class="section">
+            <label class="row" title="How much of the sails is torn away in holes">
+              <span>Tears</span>
+              <span class="slider"><input data-tank="sailTears" type="range" min="0" max="1" step="0.05" /><output></output></span>
+            </label>
+            <label class="row">
+              <span>Tear size</span>
+              <span class="slider"><input data-tank="sailTearSize" type="range" min="0.3" max="3" step="0.05" /><output></output></span>
+            </label>
+            <label class="row" title="Low gives smooth-edged holes; high gives finely shredded edges">
+              <span>Tear detail</span>
+              <span class="slider"><input data-tank="sailTearDetail" type="range" min="0" max="1" step="0.05" /><output></output></span>
+            </label>
+            <label class="row" title="How shredded the bottom edges are, down to hanging strips">
+              <span>Frayed hem</span>
+              <span class="slider"><input data-tank="sailFray" type="range" min="0" max="1" step="0.05" /><output></output></span>
+            </label>
+            <label class="row" title="Long slashes running down the canvas">
+              <span>Rips</span>
+              <span class="slider"><input data-tank="sailRips" type="range" min="0" max="1" step="0.05" /><output></output></span>
+            </label>
+            <label class="row" title="Stains, rot and green growth">
+              <span>Wear</span>
+              <span class="slider"><input data-tank="sailWear" type="range" min="0" max="1" step="0.05" /><output></output></span>
+            </label>
+            <label class="row">
+              <span>Sway</span>
+              <span class="slider"><input data-tank="sailSway" type="range" min="0" max="2" step="0.05" /><output></output></span>
+            </label>
+            <label class="row" title="A different arrangement of the same amount of damage">
+              <span>Pattern</span>
+              <span class="slider"><input data-tank="sailPattern" type="range" min="0" max="19" step="1" /><output></output></span>
+            </label>
+          </div>
+        </details>
+        <details id="sec-aqua-fish" class="fold">
+          <summary><i data-lucide="chevron-right"></i>Fish</summary>
+          <div class="section">
+            <label class="row" title="How many fish are in the tank">
+              <span>Count</span>
+              <span class="slider"><input data-tank="fishCount" type="range" min="0" max="120" step="1" /><output></output></span>
+            </label>
+            <label class="row">
+              <span>Size</span>
+              <span class="slider"><input data-tank="fishSize" type="range" min="0.4" max="2.5" step="0.05" /><output></output></span>
+            </label>
+            <label class="row">
+              <span>Speed</span>
+              <span class="slider"><input data-tank="fishSpeed" type="range" min="0.2" max="3" step="0.05" /><output></output></span>
+            </label>
+            <label class="row" title="0 swims alone, higher keeps each kind together in tighter schools">
+              <span>Schooling</span>
+              <span class="slider"><input data-tank="fishSchooling" type="range" min="0" max="2" step="0.05" /><output></output></span>
+            </label>
+            <label class="row" title="Low swims calm, straight paths; high darts about">
+              <span>Wandering</span>
+              <span class="slider"><input data-tank="fishWander" type="range" min="0" max="2" step="0.05" /><output></output></span>
+            </label>
+            <label class="row" title="Low makes lazy, wide turns; high turns sharply">
+              <span>Turning</span>
+              <span class="slider"><input data-tank="fishAgility" type="range" min="0.2" max="3" step="0.05" /><output></output></span>
+            </label>
+            <label class="row" title="How keen the fish are to swim up to the glass where you are">
+              <span>Curiosity</span>
+              <span class="slider"><input data-tank="fishCuriosity" type="range" min="0" max="1" step="0.05" /><output></output></span>
+            </label>
+            <label class="row" title="How easily a quick head movement scares them away">
+              <span>Skittish</span>
+              <span class="slider"><input data-tank="fishStartle" type="range" min="0" max="1" step="0.05" /><output></output></span>
+            </label>
+            <label class="row" title="How often fish swim in and out of the wreck">
+              <span>Exploring</span>
+              <span class="slider"><input data-tank="fishExplore" type="range" min="0" max="1" step="0.05" /><output></output></span>
+            </label>
+          </div>
+        </details>
+        <details id="sec-aqua-space" class="fold">
+          <summary><i data-lucide="chevron-right"></i>Swimming space</summary>
+          <div class="section">
+            <label class="row" title="Wider than the screen makes the screen a porthole into a bigger tank">
+              <span>Swim width</span>
+              <span class="slider"><input data-tank="tankWidth" type="range" min="1" max="3" step="0.1" /><output></output></span>
+            </label>
+            <label class="row" title="Taller than the screen: the extra height goes mostly upwards">
+              <span>Swim height</span>
+              <span class="slider"><input data-tank="tankHeight" type="range" min="1" max="3" step="0.1" /><output></output></span>
+            </label>
+            <label class="row" title="How deep the tank goes behind the glass, compared with the screen's width">
+              <span>Depth</span>
+              <span class="slider"><input data-tank="tankDepth" type="range" min="0.6" max="4" step="0.1" /><output></output></span>
+            </label>
+          </div>
+        </details>
+      </section>
+
+      <section id="mirror-options" class="group">
+        <h2 class="group-label">Mirror</h2>
+        <p class="hint">Wipe with an open hand, draw with one finger. With the mouse: drag to wipe, right-drag or Shift-drag to draw.</p>
+        <div class="buttons">
+          <button id="btn-refog" title="Mist the whole mirror over again"><i data-lucide="rotate-ccw"></i>Fog over</button>
+        </div>
+        <details id="sec-mirror-fog" class="fold">
+          <summary><i data-lucide="chevron-right"></i>Fog</summary>
+          <div class="section">
+            <label class="row">
+              <span>Thickness</span>
+              <span class="slider"><input data-mirror="mirrorFog" type="range" min="0" max="1" step="0.05" /><output></output></span>
+            </label>
+            <label class="row" title="How fast the fog creeps back over what you wiped">
+              <span>Comes back</span>
+              <span class="slider"><input data-mirror="mirrorFogReturn" type="range" min="0" max="3" step="0.05" /><output></output></span>
+            </label>
+            <label class="row" title="How blurred your reflection is behind the fog">
+              <span>Blur</span>
+              <span class="slider"><input data-mirror="mirrorBlur" type="range" min="0" max="1" step="0.05" /><output></output></span>
+            </label>
+            <label class="row" title="Streaks left where you wiped, once the fog comes back">
+              <span>Smears</span>
+              <span class="slider"><input data-mirror="mirrorSmears" type="range" min="0" max="1" step="0.05" /><output></output></span>
+            </label>
+          </div>
+        </details>
+        <details id="sec-mirror-frost" class="fold">
+          <summary><i data-lucide="chevron-right"></i>Frost</summary>
+          <div class="section">
+            <label class="row" title="How far frost grows in from the edges and corners">
+              <span>Amount</span>
+              <span class="slider"><input data-mirror="mirrorFrost" type="range" min="0" max="1" step="0.05" /><output></output></span>
+            </label>
+            <label class="row" title="How fast frost grows back">
+              <span>Growth</span>
+              <span class="slider"><input data-mirror="mirrorFrostSpeed" type="range" min="0" max="3" step="0.05" /><output></output></span>
+            </label>
+            <label class="row" title="How hard frost is to wipe away">
+              <span>Hardness</span>
+              <span class="slider"><input data-mirror="mirrorFrostHardness" type="range" min="0" max="1" step="0.05" /><output></output></span>
+            </label>
+          </div>
+        </details>
+        <details id="sec-mirror-wipe" class="fold">
+          <summary><i data-lucide="chevron-right"></i>Wiping</summary>
+          <div class="section">
+            <label class="row" title="How far towards the screen a hand must reach to wipe: 0 means any raised hand wipes">
+              <span>Reach</span>
+              <span class="slider"><input data-mirror="mirrorReach" type="range" min="0" max="1" step="0.05" /><output></output></span>
+            </label>
+            <label class="row" title="Width of a wipe with an open hand">
+              <span>Hand size</span>
+              <span class="slider"><input data-mirror="mirrorPalmSize" type="range" min="0.3" max="2.5" step="0.05" /><output></output></span>
+            </label>
+            <label class="row" title="Width of a line drawn with one finger">
+              <span>Finger size</span>
+              <span class="slider"><input data-mirror="mirrorFingerSize" type="range" min="0.3" max="3" step="0.05" /><output></output></span>
+            </label>
+            <label class="row" title="How many water drops form and run down the glass">
+              <span>Drops</span>
+              <span class="slider"><input data-mirror="mirrorDrops" type="range" min="0" max="1" step="0.05" /><output></output></span>
+            </label>
+            <label class="row"><span>Show hands</span><input data-mirror="mirrorShowHands" type="checkbox" class="switch" role="switch" /></label>
+          </div>
+        </details>
+      </section>
+
+      <section id="particle-options" class="group">
+        <h2 class="group-label">Particles</h2>
+        <p class="hint">Open hand pushes, fist pulls (open it to burst), one finger draws sparks. With the mouse: drag to push, right-drag or Shift-drag to pull.</p>
+        <label class="row"><span>Colour</span><select id="in-part-colour-mode"></select></label>
+        <label class="row" id="part-tint-row"><span>Tint</span><input id="in-part-tint" type="color" class="colour-field" /></label>
+        <label class="row" title="Loose drifting dust at 0%, a sharp portrait at 100%">
+          <span>Solid</span>
+          <span class="slider"><input data-particles="partSolid" type="range" min="0" max="1" step="0.05" /><output></output></span>
+        </label>
+        <div class="buttons">
+          <button id="btn-shatter" title="Break the figure apart; it gathers again a moment later"><i data-lucide="sparkles"></i>Shatter</button>
+        </div>
+        <details id="sec-part-shape" class="fold">
+          <summary><i data-lucide="chevron-right"></i>Shape</summary>
+          <div class="section">
+            <label class="row" title="How far behind the glass you stand, in window heights">
+              <span>Depth</span>
+              <span class="slider"><input data-particles="partDepth" type="range" min="0.1" max="2" step="0.05" /><output></output></span>
+            </label>
+            <label class="row" title="Size of your figure: 1 fills the window">
+              <span>Size</span>
+              <span class="slider"><input data-particles="partSize" type="range" min="0.4" max="1.6" step="0.05" /><output></output></span>
+            </label>
+            <label class="row" title="How much your figure bulges towards you">
+              <span>Relief</span>
+              <span class="slider"><input data-particles="partRelief" type="range" min="0" max="1.5" step="0.05" /><output></output></span>
+            </label>
+            <label class="row" title="Size of each particle">
+              <span>Grain size</span>
+              <span class="slider"><input data-particles="partDot" type="range" min="0.3" max="3" step="0.05" /><output></output></span>
+            </label>
+            <label class="row" title="How many particles there are. More looks sharper and costs more">
+              <span>Particles</span>
+              <span class="slider"><input data-particles="partCount" type="range" min="128" max="768" step="64" /><output></output></span>
+            </label>
+          </div>
+        </details>
+        <details id="sec-part-motion" class="fold">
+          <summary><i data-lucide="chevron-right"></i>Movement</summary>
+          <div class="section">
+            <label class="row" title="How restless the loose dust is">
+              <span>Dust drift</span>
+              <span class="slider"><input data-particles="partDust" type="range" min="0" max="1" step="0.05" /><output></output></span>
+            </label>
+            <label class="row" title="How much moving fast smears your figure and leaves it trailing behind you">
+              <span>Smear</span>
+              <span class="slider"><input data-particles="partSmear" type="range" min="0" max="1" step="0.05" /><output></output></span>
+            </label>
+            <label class="row" title="Shatter by itself every so many seconds">
+              <span>Auto shatter</span>
+              <span class="slider"><input data-particles="partShatterEvery" type="range" min="0" max="60" step="5" /><output></output></span>
+            </label>
+          </div>
+        </details>
+        <details id="sec-part-hands" class="fold">
+          <summary><i data-lucide="chevron-right"></i>Hands</summary>
+          <div class="section">
+            <label class="row" title="How far a hand's push and pull reaches">
+              <span>Reach</span>
+              <span class="slider"><input data-particles="partHandSize" type="range" min="0.3" max="2.5" step="0.05" /><output></output></span>
+            </label>
+            <label class="row" title="How strongly a hand pushes and pulls">
+              <span>Strength</span>
+              <span class="slider"><input data-particles="partHandForce" type="range" min="0.2" max="3" step="0.05" /><output></output></span>
+            </label>
+            <label class="row" title="How long the sparks drawn with one finger last">
+              <span>Sparkler trail</span>
+              <span class="slider"><input data-particles="partTrail" type="range" min="0" max="3" step="0.1" /><output></output></span>
+            </label>
+            <label class="row"><span>Show hands</span><input data-particles="partShowHands" type="checkbox" class="switch" role="switch" /></label>
+          </div>
+        </details>
+      </section>
+
       <section id="cube-options" class="group">
         <h2 class="group-label">Colours</h2>
         <label class="row">

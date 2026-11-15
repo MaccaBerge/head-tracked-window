@@ -12,3 +12,6 @@ public/splats/*
 
 # Local tool settings
 .claude
+
+# Self-signed certificate for serving on the home network (npm run host)
+.certs

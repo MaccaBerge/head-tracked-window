@@ -22,6 +22,7 @@ import {
   Scan,
   ScanFace,
   Shuffle,
+  Sparkles,
   Trash,
   Upload,
   X,
@@ -30,6 +31,7 @@ import {
   createIcons,
 } from "lucide";
 import * as THREE from "three";
+import { AQUA_SCENES, WATER_STYLES, createAquarium, type AquariumSettings } from "./aquarium";
 import { BALL_COLOUR_MODES, BallSystem, type BallSettings } from "./balls";
 import { MirrorFigure } from "./figure";
 import {
@@ -47,7 +49,16 @@ import {
 } from "./cubeRoom";
 import { PALETTE_PRESETS } from "./palettes";
 import { createGridRoom } from "./gridRoom";
+import { HandTracker } from "./handTracker";
 import { HeadTracker } from "./headTracker";
+import { createMirror, type MirrorRoom, type MirrorSettings } from "./mirror";
+import {
+  PARTICLE_COLOUR_MODES,
+  createParticles,
+  type ParticleColourMode,
+  type ParticleRoom,
+  type ParticleSettings,
+} from "./particles";
 import { applyOffAxis, measureWindow, type WindowGeometry } from "./offAxis";
 import { ROOMS, isBoxRoom, type Placement, type Room, type RoomConfig, type SplatRoomConfig } from "./rooms";
 import { activeProfile, loadSettings, saveSettings, type DisplayProfile } from "./settings";
@@ -77,6 +88,7 @@ createIcons({
     Scan,
     ScanFace,
     Shuffle,
+    Sparkles,
     Trash,
     Upload,
     Zap,
@@ -85,6 +97,8 @@ createIcons({
 
 const settings = loadSettings();
 const tracker = new HeadTracker(settings);
+// Hands are only looked for in the rooms that use them (the mirror and the particles).
+const handTracker = new HandTracker(tracker.video);
 const profile = (): DisplayProfile => activeProfile(settings);
 
 // ---------- Scene ----------
@@ -178,15 +192,33 @@ function rebuild(): void {
       splatRoom = null;
       const depth = win.width * settings.roomDepth;
       room =
-        config.type === "cubes"
-          ? createCubeRoom(win.width, win.height, depth, settings)
-          : createGridRoom(win.width, win.height, depth, settings.showObjects);
+        config.type === "particles"
+          ? createParticles(win.width, win.height, settings, {
+              renderer,
+              hands: handTracker,
+              cutout: () =>
+                tracker.cutout ? { cut: tracker.cutout, fresh: performance.now() - tracker.lastSeen < 400 } : null,
+              canvas,
+            })
+          : config.type === "mirror"
+          ? createMirror(win.width, win.height, settings, {
+              renderer,
+              video: tracker.video,
+              hands: handTracker,
+              body: () => tracker.body?.landmarks ?? null,
+              canvas,
+            })
+          : config.type === "aquarium"
+          ? createAquarium(win.width, win.height, settings)
+          : config.type === "cubes"
+            ? createCubeRoom(win.width, win.height, depth, settings)
+            : createGridRoom(win.width, win.height, depth, settings.showObjects);
     }
     if (room) scene.add(room.group);
-    // Rooms can bring their own haze and background.
+    // Rooms like the aquarium bring their own haze and background.
     scene.fog = room?.fog ?? null;
     scene.background = room?.background ?? DEFAULT_BACKGROUND;
-    if (import.meta.env.DEV) Object.assign(window, { room, tracker, balls });
+    if (import.meta.env.DEV) Object.assign(window, { room, tracker, handTracker, balls });
   }
   syncHud();
 }
@@ -452,6 +484,12 @@ function syncHud(): void {
   el.gridOptions.hidden = !isBoxRoom(config);
   el.objectsRow.hidden = config.type !== "grid";
   el.cubeOptions.hidden = config.type !== "cubes";
+  aquariumOptions.hidden = config.type !== "aquarium";
+  mirrorOptions.hidden = config.type !== "mirror";
+  syncMirrorControls();
+  particleOptions.hidden = config.type !== "particles";
+  syncParticleControls();
+  syncTankControls();
   el.cubeMode.value = settings.cubeColourMode;
   buildPaletteEditor();
   el.cubeSpeed.value = String(settings.cubeSpeed);
@@ -796,6 +834,237 @@ el.cubeLayout.addEventListener("change", () => {
   el.cubeLayout.blur();
   commit();
 });
+// ---------- Mirror ----------
+type NumericMirrorKey = { [K in keyof MirrorSettings]: MirrorSettings[K] extends number ? K : never }[keyof MirrorSettings];
+type SwitchMirrorKey = { [K in keyof MirrorSettings]: MirrorSettings[K] extends boolean ? K : never }[keyof MirrorSettings];
+const mirrorOptions = $("mirror-options");
+const mirrorSliders = [...document.querySelectorAll<HTMLInputElement>('input[type="range"][data-mirror]')];
+const mirrorSwitches = [...document.querySelectorAll<HTMLInputElement>('input[type="checkbox"][data-mirror]')];
+const formatMirrorValue: Record<NumericMirrorKey, (v: number) => string> = {
+  mirrorFog: percent,
+  mirrorFogReturn: times,
+  mirrorBlur: percent,
+  mirrorSmears: percent,
+  mirrorFrost: percent,
+  mirrorFrostSpeed: times,
+  mirrorFrostHardness: percent,
+  mirrorReach: percent,
+  mirrorPalmSize: times,
+  mirrorFingerSize: times,
+  mirrorDrops: percent,
+};
+function showMirrorValue(slider: HTMLInputElement): void {
+  const key = slider.dataset.mirror as NumericMirrorKey;
+  const out = slider.parentElement?.querySelector("output");
+  if (out) out.textContent = formatMirrorValue[key](settings[key]);
+}
+function syncMirrorControls(): void {
+  for (const slider of mirrorSliders) {
+    slider.value = String(settings[slider.dataset.mirror as NumericMirrorKey]);
+    showMirrorValue(slider);
+  }
+  for (const toggle of mirrorSwitches) toggle.checked = settings[toggle.dataset.mirror as SwitchMirrorKey];
+}
+// Everything in the mirror is read live, so nothing here rebuilds it.
+for (const slider of mirrorSliders) {
+  slider.addEventListener("input", () => {
+    settings[slider.dataset.mirror as NumericMirrorKey] = parseFloat(slider.value);
+    showMirrorValue(slider);
+    saveSettings(settings);
+  });
+}
+for (const toggle of mirrorSwitches) {
+  toggle.addEventListener("change", () => {
+    settings[toggle.dataset.mirror as SwitchMirrorKey] = toggle.checked;
+    saveSettings(settings);
+  });
+}
+$("btn-refog").addEventListener("click", () => {
+  if (room && "refog" in room) (room as MirrorRoom).refog();
+});
+
+// ---------- Particle mirror ----------
+type NumericParticleKey = { [K in keyof ParticleSettings]: ParticleSettings[K] extends number ? K : never }[keyof ParticleSettings];
+type SwitchParticleKey = { [K in keyof ParticleSettings]: ParticleSettings[K] extends boolean ? K : never }[keyof ParticleSettings];
+const particleOptions = $("particle-options");
+const particleSliders = [...document.querySelectorAll<HTMLInputElement>('input[type="range"][data-particles]')];
+const particleSwitches = [...document.querySelectorAll<HTMLInputElement>('input[type="checkbox"][data-particles]')];
+const formatParticleValue: Record<NumericParticleKey, (v: number) => string> = {
+  partCount: (v) => `${Math.round((v * v) / 1000)}k`,
+  partSolid: percent,
+  partDepth: times,
+  partSize: times,
+  partRelief: percent,
+  partDot: times,
+  partDust: percent,
+  partSmear: percent,
+  partShatterEvery: (v) => (v > 0 ? `${Math.round(v)} s` : "Off"),
+  partHandSize: times,
+  partHandForce: times,
+  partTrail: times,
+};
+/** The particle count is the only setting that needs a new simulation; the rest are read every frame. */
+const rebuildsParticles = new Set<string>(["partCount"]);
+function showParticleValue(slider: HTMLInputElement): void {
+  const key = slider.dataset.particles as NumericParticleKey;
+  const out = slider.parentElement?.querySelector("output");
+  if (out) out.textContent = formatParticleValue[key](settings[key]);
+}
+const particleColourSelect = $<HTMLSelectElement>("in-part-colour-mode");
+for (const mode of PARTICLE_COLOUR_MODES) particleColourSelect.add(new Option(mode.name, mode.id));
+const particleTint = $<HTMLInputElement>("in-part-tint");
+function syncParticleControls(): void {
+  for (const slider of particleSliders) {
+    slider.value = String(settings[slider.dataset.particles as NumericParticleKey]);
+    showParticleValue(slider);
+  }
+  for (const toggle of particleSwitches) toggle.checked = settings[toggle.dataset.particles as SwitchParticleKey];
+  particleColourSelect.value = settings.partColourMode;
+  particleTint.value = settings.partTint;
+  $("part-tint-row").hidden = settings.partColourMode !== "tint";
+}
+for (const slider of particleSliders) {
+  slider.addEventListener("input", () => {
+    const key = slider.dataset.particles as NumericParticleKey;
+    settings[key] = parseFloat(slider.value);
+    showParticleValue(slider);
+    if (rebuildsParticles.has(key)) {
+      // A new simulation: build a fresh room rather than resize this one.
+      roomId = "";
+      commitSoon();
+    } else {
+      saveSettings(settings);
+    }
+  });
+}
+for (const toggle of particleSwitches) {
+  toggle.addEventListener("change", () => {
+    settings[toggle.dataset.particles as SwitchParticleKey] = toggle.checked;
+    saveSettings(settings);
+  });
+}
+particleColourSelect.addEventListener("change", () => {
+  settings.partColourMode = particleColourSelect.value as ParticleColourMode;
+  $("part-tint-row").hidden = settings.partColourMode !== "tint";
+  saveSettings(settings);
+  particleColourSelect.blur();
+});
+particleTint.addEventListener("input", () => {
+  settings.partTint = particleTint.value;
+  saveSettings(settings);
+});
+$("btn-shatter").addEventListener("click", () => {
+  if (room && "shatter" in room) (room as ParticleRoom).shatter();
+});
+
+// ---------- Aquarium ----------
+type NumericTankKey = { [K in keyof AquariumSettings]: AquariumSettings[K] extends number ? K : never }[keyof AquariumSettings];
+type SwitchTankKey = { [K in keyof AquariumSettings]: AquariumSettings[K] extends boolean ? K : never }[keyof AquariumSettings];
+const aquariumOptions = $("aquarium-options");
+const waterSelect = $<HTMLSelectElement>("in-water");
+for (const w of WATER_STYLES) waterSelect.add(new Option(w.name, w.id));
+const aquaSceneSelect = $<HTMLSelectElement>("in-aqua-scene");
+for (const sc of AQUA_SCENES) aquaSceneSelect.add(new Option(sc.name, sc.id));
+aquaSceneSelect.addEventListener("change", () => {
+  const scene = AQUA_SCENES.find((sc) => sc.id === aquaSceneSelect.value);
+  if (scene) settings.aquaScene = scene.id;
+  showReefOptions();
+  aquaSceneSelect.blur();
+  commit();
+});
+const tankSliders = [...document.querySelectorAll<HTMLInputElement>('input[type="range"][data-tank]')];
+const tankSwitches = [...document.querySelectorAll<HTMLInputElement>('input[type="checkbox"][data-tank]')];
+const formatTankValue: Record<NumericTankKey, (v: number) => string> = {
+  tankWidth: times,
+  tankHeight: times,
+  tankDepth: times,
+  fishCount: (v) => String(Math.round(v)),
+  fishSize: times,
+  fishSpeed: times,
+  fishSchooling: percent,
+  fishWander: percent,
+  fishAgility: percent,
+  fishCuriosity: percent,
+  fishStartle: percent,
+  fishExplore: percent,
+  waterDeep: percent,
+  shipSize: times,
+  reefRocks: times,
+  reefRockHeight: times,
+  reefEnclose: percent,
+  reefCoral: times,
+  reefCoralSize: times,
+  reefGlow: percent,
+  reefSway: times,
+  causticStrength: times,
+  causticSize: times,
+  causticSharpness: percent,
+  causticSpeed: times,
+  causticDetail: percent,
+  causticCurve: percent,
+  sailTears: percent,
+  sailTearSize: times,
+  sailTearDetail: percent,
+  sailFray: percent,
+  sailRips: percent,
+  sailWear: percent,
+  sailSway: times,
+  sailPattern: (v) => String(Math.round(v) + 1),
+};
+/** Settings that change the tank itself, so it's rebuilt; the rest are read live. */
+const rebuildsTank = new Set<string>([
+  "tankDepth",
+  "tankWidth",
+  "tankHeight",
+  "waterDeep",
+  "shipSize",
+  "reefRocks",
+  "reefRockHeight",
+  "reefEnclose",
+  "reefCoral",
+  "reefCoralSize",
+]);
+/** The reef, wreck and sail settings only apply to the shipwreck scene. */
+function showReefOptions(): void {
+  for (const el of document.querySelectorAll<HTMLElement>(".wreck-only")) el.hidden = settings.aquaScene === "tank";
+}
+function showTankValue(slider: HTMLInputElement): void {
+  const key = slider.dataset.tank as NumericTankKey;
+  const out = slider.parentElement?.querySelector("output");
+  if (out) out.textContent = formatTankValue[key](settings[key]);
+}
+function syncTankControls(): void {
+  waterSelect.value = settings.water;
+  aquaSceneSelect.value = settings.aquaScene;
+  showReefOptions();
+  for (const slider of tankSliders) {
+    slider.value = String(settings[slider.dataset.tank as NumericTankKey]);
+    showTankValue(slider);
+  }
+  for (const toggle of tankSwitches) toggle.checked = settings[toggle.dataset.tank as SwitchTankKey];
+}
+for (const slider of tankSliders) {
+  slider.addEventListener("input", () => {
+    const key = slider.dataset.tank as NumericTankKey;
+    settings[key] = parseFloat(slider.value);
+    showTankValue(slider);
+    if (rebuildsTank.has(key)) commitSoon();
+    else saveSettings(settings);
+  });
+}
+for (const toggle of tankSwitches) {
+  toggle.addEventListener("change", () => {
+    settings[toggle.dataset.tank as SwitchTankKey] = toggle.checked;
+    saveSettings(settings);
+  });
+}
+waterSelect.addEventListener("change", () => {
+  const style = WATER_STYLES.find((w) => w.id === waterSelect.value);
+  if (style) settings.water = style.id;
+  waterSelect.blur();
+  commit();
+});
+
 // ---------- Balls ----------
 type NumericBallKey = { [K in keyof BallSettings]: BallSettings[K] extends number ? K : never }[keyof BallSettings];
 type SwitchBallKey = { [K in keyof BallSettings]: BallSettings[K] extends boolean ? K : never }[keyof BallSettings];
@@ -1248,10 +1517,14 @@ function frame(now: number): void {
   last = now;
 
   tracker.update(now);
+  const roomType = currentConfig().type;
+  handTracker.enabled = roomType === "mirror" || roomType === "particles";
+  handTracker.update(now);
   updateEye(now, dt);
-  tracker.wantCutout = settings.showFigure && isBoxRoom(currentConfig());
+  const showFigure = settings.showFigure && isBoxRoom(currentConfig());
+  tracker.wantCutout = showFigure || roomType === "particles";
   figure.update(tracker, profile(), win, {
-    enabled: tracker.wantCutout,
+    enabled: showFigure,
     size: settings.figureSize,
     distanceEffect: settings.figureDistanceEffect,
     roomDepth: win.width * settings.roomDepth,
