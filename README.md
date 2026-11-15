@@ -29,6 +29,10 @@ instead of the camera, **P** turns head tracking of the view on and off.
 - **Cube room**: walls of cubes with keyboard-style colour effects, published
   colour palettes, and adjustable layout and movement, plus balls that bounce
   off the moving cubes.
+- **Aquarium**: a coral reef around a pirate shipwreck in the open ocean (or a
+  glass fish tank). Fish school, come up to the glass to look at you, dart away
+  when you move suddenly, and swim in and out of a hole in the wreck. Reef,
+  sails, light and fish are adjustable in the panel.
 - **Splat rooms**: Gaussian splat scenes (`.ply`, `.spz`, `.splat`, `.ksplat`,
   `.sog`). Drag a file onto the page to add it, or put it in `public/splats/`
   and add an entry in `src/rooms.ts`. Placement behind the window is adjusted in
