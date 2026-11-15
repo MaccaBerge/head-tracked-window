@@ -1,8 +1,4 @@
-// Types only: the MediaPipe library is loaded the first time hands are needed.
-import type { HandLandmarker, NormalizedLandmark } from "@mediapipe/tasks-vision";
-
-const MODEL_URL =
-  "https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task";
+import type { NormalizedLandmark } from "@mediapipe/tasks-vision";
 
 // Indices into the 21-point hand.
 const WRIST = 0;
@@ -11,7 +7,7 @@ const KNUCKLES = [6, 10, 14, 18]; // the middle joint of each of those fingers
 const PALM = [0, 5, 9, 17];
 const MIDDLE_BASE = 9;
 
-/** What a hand is doing: an open palm wipes wide, a pointing finger draws, a fist does nothing. */
+/** What a hand is doing: an open palm, a pointing finger or a fist. */
 export type HandPose = "palm" | "point" | "fist";
 
 export interface Hand {
@@ -26,8 +22,9 @@ export interface Hand {
 }
 
 /**
- * Finds the viewer's hands in the webcam image and what they're doing.
- * Runs on the head tracker's video, only while `enabled` (it costs time).
+ * The viewer's hands and what they're doing. The hand model runs in the
+ * tracking worker alongside the pose model (see trackerWorker.ts), only while
+ * `enabled` (it costs time); the head tracker fills this in with its results.
  */
 export class HandTracker {
   enabled = false;
@@ -35,49 +32,15 @@ export class HandTracker {
   /** Time the hands were last updated. */
   seenAt = 0;
   status: "off" | "loading" | "ready" | "failed" = "off";
-  private landmarker: HandLandmarker | null = null;
-  private lastVideoTime = -1;
-
-  constructor(private video: HTMLVideoElement) {}
-
-  private async load(): Promise<void> {
-    this.status = "loading";
-    try {
-      const { FilesetResolver, HandLandmarker } = await import("@mediapipe/tasks-vision");
-      const fileset = await FilesetResolver.forVisionTasks(`${import.meta.env.BASE_URL}mediapipe-wasm`);
-      this.landmarker = await HandLandmarker.createFromOptions(fileset, {
-        baseOptions: { modelAssetPath: MODEL_URL, delegate: "GPU" },
-        runningMode: "VIDEO",
-        numHands: 2,
-        minHandDetectionConfidence: 0.5,
-        minHandPresenceConfidence: 0.5,
-        minTrackingConfidence: 0.5,
-      });
-      this.status = "ready";
-    } catch {
-      this.status = "failed";
-    }
-  }
 
   /** Call once per rendered frame. */
-  update(now: number): void {
-    if (!this.enabled) {
-      this.hands = [];
-      return;
-    }
-    if (this.video.readyState < 2) return;
-    if (this.status === "off") void this.load();
-    if (!this.landmarker) return;
-    if (this.video.currentTime === this.lastVideoTime) return;
-    this.lastVideoTime = this.video.currentTime;
-    const result = this.landmarker.detectForVideo(this.video, now);
-    const aspect = this.video.videoWidth / Math.max(1, this.video.videoHeight);
-    this.hands = result.landmarks.map((lm, i) => describe(lm, aspect, result.handedness[i]?.[0]?.categoryName ?? ""));
-    this.seenAt = now;
+  update(_now: number): void {
+    if (!this.enabled) this.hands = [];
   }
 }
 
-function describe(lm: NormalizedLandmark[], aspect: number, side: string): Hand {
+/** Works out a hand's pose and where it acts, from the hand model's 21 landmarks. */
+export function describeHand(lm: NormalizedLandmark[], aspect: number, side: string): Hand {
   // Distances measured with x stretched to the image's shape, so they're fair in both directions.
   const dist = (a: NormalizedLandmark, b: NormalizedLandmark) => Math.hypot((a.x - b.x) * aspect, a.y - b.y);
   const wrist = lm[WRIST];

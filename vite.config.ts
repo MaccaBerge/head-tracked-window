@@ -11,6 +11,8 @@ export default defineConfig(({ mode }) => {
   const certs = ".certs";
   const lan = mode === "lan" && existsSync(`${certs}/key.pem`);
   return {
+    // The tracking worker loads MediaPipe's Wasm with import(), which needs an ES module worker.
+    worker: { format: "es" },
     server: lan
       ? {
           host: true,

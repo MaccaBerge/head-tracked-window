@@ -41,8 +41,8 @@ const SCALE = 0.25;
  * follows you at any distance. `fit` makes it wider or tighter.
  */
 export class BodyGate {
-  /** The last shape drawn, white where you may be, in webcam image coordinates. */
-  readonly canvas = document.createElement("canvas");
+  /** The last shape drawn, white where you may be, in webcam image coordinates. An offscreen canvas, as this runs in the tracking worker. */
+  readonly canvas = new OffscreenCanvas(16, 16);
   private ctx = this.canvas.getContext("2d", { willReadFrequently: true })!;
   private columns = new Int32Array(0);
   private rows = new Int32Array(0);
@@ -131,6 +131,11 @@ export class BodyGate {
       band([at(an), at(ft)], 0.4);
     }
     ctx.filter = "none";
+  }
+
+  /** A copy of the last shape drawn, to show over the camera preview. */
+  snapshot(): Promise<ImageBitmap> {
+    return createImageBitmap(this.canvas);
   }
 
   /** Scales each mask pixel by how much it lies inside the last shape drawn. */

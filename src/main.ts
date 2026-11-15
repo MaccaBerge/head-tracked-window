@@ -96,9 +96,9 @@ createIcons({
 });
 
 const settings = loadSettings();
-const tracker = new HeadTracker(settings);
 // Hands are only looked for in the rooms that use them (the mirror and the particles).
-const handTracker = new HandTracker(tracker.video);
+const handTracker = new HandTracker();
+const tracker = new HeadTracker(settings, handTracker);
 const profile = (): DisplayProfile => activeProfile(settings);
 
 // ---------- Scene ----------
@@ -1445,9 +1445,9 @@ function drawMask(ctx: CanvasRenderingContext2D, w: number, h: number): void {
   }
   ctx.drawImage(maskCanvas, 0, 0, w, h);
   // The body shape the mask is clipped to, as a faint veil.
-  if (settings.cutoutSkeleton && settings.cutoutShowShape && tracker.gate.canvas.width > 16) {
+  if (settings.cutoutSkeleton && settings.cutoutShowShape && tracker.gateImage) {
     ctx.globalAlpha = 0.22;
-    ctx.drawImage(tracker.gate.canvas, 0, 0, w, h);
+    ctx.drawImage(tracker.gateImage, 0, 0, w, h);
     ctx.globalAlpha = 1;
   }
 }
