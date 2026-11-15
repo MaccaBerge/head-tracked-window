@@ -27,7 +27,8 @@ instead of the camera, **P** turns head tracking of the view on and off.
 
 - **Grid room**: a wireframe box with depth targets, for checking the effect.
 - **Cube room**: walls of cubes with keyboard-style colour effects, published
-  colour palettes, and adjustable layout and movement.
+  colour palettes, and adjustable layout and movement, plus balls that bounce
+  off the moving cubes.
 - **Splat rooms**: Gaussian splat scenes (`.ply`, `.spz`, `.splat`, `.ksplat`,
   `.sog`). Drag a file onto the page to add it, or put it in `public/splats/`
   and add an entry in `src/rooms.ts`. Placement behind the window is adjusted in
