@@ -1,18 +1,34 @@
 // Types only: the MediaPipe library itself is loaded when the camera starts,
 // so it isn't part of the first download.
 import type {
+  ImageSegmenter,
   Landmark,
   MPMask,
   NormalizedLandmark,
   PoseLandmarker,
   PoseLandmarkerResult,
 } from "@mediapipe/tasks-vision";
+import { BodyGate } from "./bodyGate";
 import { MaskCleaner } from "./maskCleaner";
 import { OneEuroFilter } from "./oneEuro";
 import { activeProfile, type Settings } from "./settings";
 
 const MODEL_URL =
   "https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_full/float16/1/pose_landmarker_full.task";
+/**
+ * A model made for cutting people out. It labels each pixel as background,
+ * hair, body skin, face skin, clothes or accessories, and is much cleaner
+ * than the mask the pose model gives as a side product.
+ */
+const SEGMENTER_URL =
+  "https://storage.googleapis.com/mediapipe-models/image_segmenter/selfie_multiclass_256x256/float32/latest/selfie_multiclass_256x256.tflite";
+
+/** Where the person mask comes from. */
+export type CutoutModel = "pose" | "segmenter";
+export const CUTOUT_MODELS: { id: CutoutModel; name: string }[] = [
+  { id: "segmenter", name: "Segmenter" },
+  { id: "pose", name: "Pose mask" },
+];
 
 // Indices into the 33-point body pose.
 const EYE_POINTS = [1, 2, 3, 4, 5, 6]; // inner, centre and outer of both eyes
@@ -101,14 +117,24 @@ export class HeadTracker {
   cutoutInfo = "waiting for a person";
 
   private landmarker: PoseLandmarker | null = null;
+  private fileset: Awaited<ReturnType<typeof import("@mediapipe/tasks-vision").FilesetResolver.forVisionTasks>> | null = null;
+  private segmenter: ImageSegmenter | null = null;
+  private segmenterStatus: "off" | "loading" | "ready" | "failed" = "off";
+  /** Set when the locked person was found this frame and the segmenter should cut them out. */
+  private segmentFor: NormalizedLandmark[] | null = null;
+  /** Which model made the masks the cleaner is averaging, so switching starts afresh. */
+  private maskSource: CutoutModel | null = null;
   private cutoutCtx: CanvasRenderingContext2D | null = null;
-  private maskGl: WebGL2RenderingContext | null = null;
-  private maskFb: WebGLFramebuffer | null = null;
-  private maskRead: MaskRead | null = null;
+  /** Each MediaPipe task may draw in its own WebGL context; how to read masks from each. */
+  private maskReaders = new Map<WebGL2RenderingContext, { fb: WebGLFramebuffer | null; read: MaskRead | null }>();
   private rawMask = new Uint8Array(0);
   private cleaner = new MaskCleaner();
+  /** The body shape that clips the mask, drawn from the skeleton. */
+  readonly gate = new BodyGate();
   /** How long the last cleanup took, in milliseconds. */
   cleanMs = 0;
+  /** How long the person segmenter takes per frame, in milliseconds, smoothed. */
+  segmentMs = 0;
   private lastVideoTime = -1;
   private lastDetect = 0;
   private lock: Candidate | null = null;
@@ -142,6 +168,7 @@ export class HeadTracker {
     try {
       const { FilesetResolver, PoseLandmarker } = await import("@mediapipe/tasks-vision");
       const fileset = await FilesetResolver.forVisionTasks(`${import.meta.env.BASE_URL}mediapipe-wasm`);
+      this.fileset = fileset;
       this.landmarker = await PoseLandmarker.createFromOptions(fileset, {
         baseOptions: { modelAssetPath: MODEL_URL, delegate: "GPU" },
         runningMode: "VIDEO",
@@ -178,7 +205,54 @@ export class HeadTracker {
 
     // The callback form runs straight away and lets us read the masks
     // without MediaPipe copying them first.
+    this.segmentFor = null;
     this.landmarker.detectForVideo(this.video, now, (result) => this.process(result, now, w, h));
+
+    // The segmenter runs after the pose model has finished with this frame,
+    // only when someone is locked, and cuts out whoever the skeleton says is them.
+    const lm = this.segmentFor as NormalizedLandmark[] | null;
+    if (lm && this.segmenter) {
+      const t0 = performance.now();
+      this.segmenter.segmentForVideo(this.video, now, (result) => {
+        // Confidence of "background": everything else (hair, skin, clothes, accessories) is the person.
+        const background = result.confidenceMasks?.[0];
+        if (!background) {
+          this.cutoutInfo = "segmenter gave no mask";
+          return;
+        }
+        this.tryCapture(background, true, lm, "segmenter");
+      });
+      // Smoothed, for the panel: includes waiting for the GPU to hand the mask back.
+      const ms = performance.now() - t0;
+      this.segmentMs = this.segmentMs ? this.segmentMs + 0.1 * (ms - this.segmentMs) : ms;
+    }
+  }
+
+  /** Loads the person segmenter the first time it's wanted. */
+  private async loadSegmenter(): Promise<void> {
+    if (!this.fileset) return;
+    this.segmenterStatus = "loading";
+    try {
+      const { ImageSegmenter } = await import("@mediapipe/tasks-vision");
+      this.segmenter = await ImageSegmenter.createFromOptions(this.fileset, {
+        baseOptions: { modelAssetPath: SEGMENTER_URL, delegate: "GPU" },
+        runningMode: "VIDEO",
+        outputConfidenceMasks: true,
+        outputCategoryMask: false,
+      });
+      this.segmenterStatus = "ready";
+    } catch (e) {
+      this.segmenterStatus = "failed";
+      this.cutoutInfo = `segmenter failed: ${e instanceof Error ? e.message : String(e)}`;
+    }
+  }
+
+  private tryCapture(mask: MPMask, invert: boolean, lm: NormalizedLandmark[], source: CutoutModel): void {
+    try {
+      this.captureCutout(mask, invert, lm, source);
+    } catch (e) {
+      this.cutoutInfo = `error: ${e instanceof Error ? e.message : String(e)}`;
+    }
   }
 
   private process(result: PoseLandmarkerResult, now: number, w: number, h: number): void {
@@ -218,15 +292,17 @@ export class HeadTracker {
     this.status = "tracking";
     this.body = { landmarks: chosen.landmarks, world: chosen.world };
     if (this.wantCutout) {
-      const mask = result.segmentationMasks?.[chosen.index];
-      if (!mask) {
-        this.cutoutInfo = `model gave no mask (${result.segmentationMasks?.length ?? 0} masks)`;
+      const useSegmenter = this.settings.cutoutModel === "segmenter" && this.segmenterStatus !== "failed";
+      if (useSegmenter && this.segmenterStatus === "off") void this.loadSegmenter();
+      if (useSegmenter && this.segmenter) {
+        this.segmentFor = chosen.landmarks;
+      } else if (useSegmenter) {
+        this.cutoutInfo = "loading the person segmenter";
       } else {
-        try {
-          this.captureCutout(mask);
-        } catch (e) {
-          this.cutoutInfo = `error: ${e instanceof Error ? e.message : String(e)}`;
-        }
+        // The pose model's own mask, one per person it found.
+        const mask = result.segmentationMasks?.[chosen.index];
+        if (!mask) this.cutoutInfo = `model gave no mask (${result.segmentationMasks?.length ?? 0} masks)`;
+        else this.tryCapture(mask, false, chosen.landmarks, "pose");
       }
     }
 
@@ -283,8 +359,11 @@ export class HeadTracker {
     return { index, px, py, ratio: ratioSum / weightSum, landmarks: lm, world };
   }
 
-  /** Keeps a copy of this webcam frame and the locked person's mask over it. */
-  private captureCutout(mask: MPMask): void {
+  /**
+   * Keeps a copy of this webcam frame and the locked person's mask over it.
+   * @param invert The mask says where the person is not (the segmenter's background).
+   */
+  private captureCutout(mask: MPMask, invert: boolean, lm: NormalizedLandmark[], source: CutoutModel): void {
     if (!this.cutout) {
       const image = document.createElement("canvas");
       this.cutoutCtx = image.getContext("2d");
@@ -304,9 +383,21 @@ export class HeadTracker {
     const n = mask.width * mask.height;
     if (this.rawMask.length !== n) this.rawMask = new Uint8Array(n);
     this.readMask(mask, this.rawMask);
+    if (invert) for (let i = 0; i < n; i++) this.rawMask[i] = 255 - this.rawMask[i];
 
-    // Steady the outline and drop stray blobs (see maskCleaner.ts).
+    // Averaging masks from two different models would blur them together.
+    if (source !== this.maskSource) {
+      this.maskSource = source;
+      this.cleaner.reset();
+    }
+
     const t0 = performance.now();
+    // Nothing outside a body shape around the skeleton can be the person (see bodyGate.ts).
+    if (this.settings.cutoutSkeleton) {
+      this.gate.draw(lm, mask.width, mask.height, this.settings.cutoutFit);
+      this.gate.apply(this.rawMask, mask.width, mask.height);
+    }
+    // Steady the outline and drop stray blobs (see maskCleaner.ts).
     this.cleaner.clean(this.rawMask, mask.width, mask.height);
     this.cleanMs = performance.now() - t0;
     c.mask = this.cleaner.output;
@@ -317,7 +408,8 @@ export class HeadTracker {
     let inside = 0;
     for (let i = 0; i < c.mask.length; i++) if (c.mask[i] > 127) inside++;
     const share = (100 * inside) / Math.max(1, c.mask.length);
-    this.cutoutInfo = `${share.toFixed(0)}% person, cleanup ${this.cleanMs.toFixed(1)} ms`;
+    const model = source === "segmenter" ? `segmenter ${this.segmentMs.toFixed(0)} ms` : "pose mask";
+    this.cutoutInfo = `${model}, ${share.toFixed(0)}% person, cleanup ${this.cleanMs.toFixed(1)} ms`;
   }
 
   /**
@@ -338,34 +430,34 @@ export class HeadTracker {
     }
     const gl = mask.canvas.getContext("webgl2") as WebGL2RenderingContext | null;
     if (!gl) throw new Error("no WebGL2 context for the mask");
-    if (gl !== this.maskGl) {
-      this.maskGl = gl;
-      this.maskFb = gl.createFramebuffer();
-      this.maskRead = null;
+    let reader = this.maskReaders.get(gl);
+    if (!reader) {
+      reader = { fb: gl.createFramebuffer(), read: null };
+      this.maskReaders.set(gl, reader);
       gl.getExtension("EXT_color_buffer_float");
       gl.getExtension("EXT_color_buffer_half_float");
     }
 
     const texture = mask.getAsWebGLTexture();
     const previous = gl.getParameter(gl.FRAMEBUFFER_BINDING) as WebGLFramebuffer | null;
-    gl.bindFramebuffer(gl.FRAMEBUFFER, this.maskFb);
+    gl.bindFramebuffer(gl.FRAMEBUFFER, reader.fb);
     try {
       gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, texture, 0);
       const status = gl.checkFramebufferStatus(gl.FRAMEBUFFER);
       if (status !== gl.FRAMEBUFFER_COMPLETE) throw new Error(`mask texture can't be read (status ${status})`);
 
       // Try the format that worked last time first, then the candidates.
-      const candidates: MaskRead[] = this.maskRead ? [this.maskRead] : maskReadCandidates(gl);
+      const candidates: MaskRead[] = reader.read ? [reader.read] : maskReadCandidates(gl);
       for (const read of candidates) {
         gl.getError(); // clear any error left over from before
         const buffer = read.buffer(n * read.channels);
         gl.readPixels(0, 0, mask.width, mask.height, read.format, read.type, buffer);
         if (gl.getError() !== gl.NO_ERROR) continue;
-        this.maskRead = read;
+        reader.read = read;
         read.toBytes(buffer, read.channels, out, n);
         return;
       }
-      this.maskRead = null;
+      reader.read = null;
       throw new Error(
         `no readable format (texture reads as format ${gl.getParameter(gl.IMPLEMENTATION_COLOR_READ_FORMAT)}, ` +
           `type ${gl.getParameter(gl.IMPLEMENTATION_COLOR_READ_TYPE)})`,

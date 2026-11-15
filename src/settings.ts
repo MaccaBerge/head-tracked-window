@@ -3,6 +3,7 @@ import { BALL_DEFAULTS, type BallSettings } from "./balls";
 import { CUBE_DEFAULTS, type CubeRoomSettings } from "./cubeRoom";
 import { MIRROR_DEFAULTS, type MirrorSettings } from "./mirror";
 import { PARTICLE_DEFAULTS, type ParticleSettings } from "./particles";
+import type { CutoutModel } from "./headTracker";
 import type { Placement } from "./rooms";
 
 /** One physical setup: a display and where the webcam sits relative to it. */
@@ -48,6 +49,14 @@ export interface Settings extends CubeRoomSettings, BallSettings, AquariumSettin
   figureDistanceEffect: number;
   /** Size of the figure: 1 is a person to scale with a 2.5 m tall room. */
   figureSize: number;
+  /** Where the person cutout comes from: the person segmenter, or the pose model's own mask. */
+  cutoutModel: CutoutModel;
+  /** Clip the cutout to a body shape around the skeleton, dropping furniture and wall beside you. */
+  cutoutSkeleton: boolean;
+  /** How loosely that body shape fits: 1 is normal, more leaves room for loose clothes and big hair. */
+  cutoutFit: number;
+  /** Show the body shape over the camera preview. */
+  cutoutShowShape: boolean;
   showHud: boolean;
 }
 
@@ -93,6 +102,10 @@ function defaults(): Settings {
     showFigure: true,
     figureDistanceEffect: 1,
     figureSize: 1,
+    cutoutModel: "segmenter",
+    cutoutSkeleton: true,
+    cutoutFit: 1,
+    cutoutShowShape: false,
     ...CUBE_DEFAULTS,
     ...BALL_DEFAULTS,
     ...AQUARIUM_DEFAULTS,
