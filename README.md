@@ -23,6 +23,20 @@ under Display and camera.
 Keys: **H** hides the panel, **F** fullscreen, **M** steers with the mouse
 instead of the camera, **P** turns head tracking of the view on and off.
 
+### On another computer at home
+
+Browsers only allow the webcam on `https` pages, so serving to the home
+network needs a certificate. Make a self-signed one once (put your computer's
+network address in place of `10.0.0.167`), then start the server:
+
+```bash
+mkdir -p .certs && openssl req -x509 -newkey rsa:2048 -nodes -days 825 -keyout .certs/key.pem -out .certs/cert.pem -subj "/CN=window-room.local" -addext "subjectAltName=IP:10.0.0.167,DNS:localhost,IP:127.0.0.1"
+npm run host
+```
+
+Open the Network address it prints on the other computer and accept the
+browser's warning about the certificate. Settings are kept per browser.
+
 ## Rooms
 
 - **Grid room**: a wireframe box with depth targets, for checking the effect.
