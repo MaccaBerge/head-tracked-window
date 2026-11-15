@@ -70,7 +70,14 @@ export interface AquariumRoomConfig {
   name: string;
 }
 
-export type RoomConfig = GridRoomConfig | CubeRoomConfig | AquariumRoomConfig | SplatRoomConfig;
+/** A fogged-up mirror showing the webcam (see mirror.ts). */
+export interface MirrorRoomConfig {
+  type: "mirror";
+  id: string;
+  name: string;
+}
+
+export type RoomConfig = GridRoomConfig | CubeRoomConfig | AquariumRoomConfig | MirrorRoomConfig | SplatRoomConfig;
 
 /** Rooms built in real metres around the window, rather than loaded scenes. */
 export function isBoxRoom(c: RoomConfig): c is GridRoomConfig | CubeRoomConfig {
@@ -82,6 +89,7 @@ export const ROOMS: RoomConfig[] = [
   { type: "grid", id: "grid", name: "Grid room" },
   { type: "cubes", id: "cubes", name: "Cube room" },
   { type: "aquarium", id: "aquarium", name: "Aquarium" },
+  { type: "mirror", id: "mirror", name: "Fogged mirror" },
   {
     type: "splat",
     id: "fireplace",

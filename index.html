@@ -271,6 +271,74 @@
         </details>
       </section>
 
+      <section id="mirror-options" class="group">
+        <h2 class="group-label">Mirror</h2>
+        <p class="hint">Wipe with an open hand, draw with one finger. With the mouse: drag to wipe, right-drag or Shift-drag to draw.</p>
+        <div class="buttons">
+          <button id="btn-refog" title="Mist the whole mirror over again"><i data-lucide="rotate-ccw"></i>Fog over</button>
+        </div>
+        <details id="sec-mirror-fog" class="fold">
+          <summary><i data-lucide="chevron-right"></i>Fog</summary>
+          <div class="section">
+            <label class="row">
+              <span>Thickness</span>
+              <span class="slider"><input data-mirror="mirrorFog" type="range" min="0" max="1" step="0.05" /><output></output></span>
+            </label>
+            <label class="row" title="How fast the fog creeps back over what you wiped">
+              <span>Comes back</span>
+              <span class="slider"><input data-mirror="mirrorFogReturn" type="range" min="0" max="3" step="0.05" /><output></output></span>
+            </label>
+            <label class="row" title="How blurred your reflection is behind the fog">
+              <span>Blur</span>
+              <span class="slider"><input data-mirror="mirrorBlur" type="range" min="0" max="1" step="0.05" /><output></output></span>
+            </label>
+            <label class="row" title="Streaks left where you wiped, once the fog comes back">
+              <span>Smears</span>
+              <span class="slider"><input data-mirror="mirrorSmears" type="range" min="0" max="1" step="0.05" /><output></output></span>
+            </label>
+          </div>
+        </details>
+        <details id="sec-mirror-frost" class="fold">
+          <summary><i data-lucide="chevron-right"></i>Frost</summary>
+          <div class="section">
+            <label class="row" title="How far frost grows in from the edges and corners">
+              <span>Amount</span>
+              <span class="slider"><input data-mirror="mirrorFrost" type="range" min="0" max="1" step="0.05" /><output></output></span>
+            </label>
+            <label class="row" title="How fast frost grows back">
+              <span>Growth</span>
+              <span class="slider"><input data-mirror="mirrorFrostSpeed" type="range" min="0" max="3" step="0.05" /><output></output></span>
+            </label>
+            <label class="row" title="How hard frost is to wipe away">
+              <span>Hardness</span>
+              <span class="slider"><input data-mirror="mirrorFrostHardness" type="range" min="0" max="1" step="0.05" /><output></output></span>
+            </label>
+          </div>
+        </details>
+        <details id="sec-mirror-wipe" class="fold">
+          <summary><i data-lucide="chevron-right"></i>Wiping</summary>
+          <div class="section">
+            <label class="row" title="How far towards the screen a hand must reach to wipe: 0 means any raised hand wipes">
+              <span>Reach</span>
+              <span class="slider"><input data-mirror="mirrorReach" type="range" min="0" max="1" step="0.05" /><output></output></span>
+            </label>
+            <label class="row" title="Width of a wipe with an open hand">
+              <span>Hand size</span>
+              <span class="slider"><input data-mirror="mirrorPalmSize" type="range" min="0.3" max="2.5" step="0.05" /><output></output></span>
+            </label>
+            <label class="row" title="Width of a line drawn with one finger">
+              <span>Finger size</span>
+              <span class="slider"><input data-mirror="mirrorFingerSize" type="range" min="0.3" max="3" step="0.05" /><output></output></span>
+            </label>
+            <label class="row" title="How many water drops form and run down the glass">
+              <span>Drops</span>
+              <span class="slider"><input data-mirror="mirrorDrops" type="range" min="0" max="1" step="0.05" /><output></output></span>
+            </label>
+            <label class="row"><span>Show hands</span><input data-mirror="mirrorShowHands" type="checkbox" class="switch" role="switch" /></label>
+          </div>
+        </details>
+      </section>
+
       <section id="cube-options" class="group">
         <h2 class="group-label">Colours</h2>
         <label class="row">
