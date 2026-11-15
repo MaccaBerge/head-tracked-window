@@ -77,7 +77,20 @@ export interface MirrorRoomConfig {
   name: string;
 }
 
-export type RoomConfig = GridRoomConfig | CubeRoomConfig | AquariumRoomConfig | MirrorRoomConfig | SplatRoomConfig;
+/** Particles that gather into the viewer (see particles.ts). */
+export interface ParticleRoomConfig {
+  type: "particles";
+  id: string;
+  name: string;
+}
+
+export type RoomConfig =
+  | GridRoomConfig
+  | CubeRoomConfig
+  | AquariumRoomConfig
+  | MirrorRoomConfig
+  | ParticleRoomConfig
+  | SplatRoomConfig;
 
 /** Rooms built in real metres around the window, rather than loaded scenes. */
 export function isBoxRoom(c: RoomConfig): c is GridRoomConfig | CubeRoomConfig {
@@ -90,6 +103,7 @@ export const ROOMS: RoomConfig[] = [
   { type: "cubes", id: "cubes", name: "Cube room" },
   { type: "aquarium", id: "aquarium", name: "Aquarium" },
   { type: "mirror", id: "mirror", name: "Fogged mirror" },
+  { type: "particles", id: "particles", name: "Particle mirror" },
   {
     type: "splat",
     id: "fireplace",

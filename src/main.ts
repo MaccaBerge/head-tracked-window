@@ -22,6 +22,7 @@ import {
   Scan,
   ScanFace,
   Shuffle,
+  Sparkles,
   Trash,
   Upload,
   X,
@@ -51,6 +52,13 @@ import { createGridRoom } from "./gridRoom";
 import { HandTracker } from "./handTracker";
 import { HeadTracker } from "./headTracker";
 import { createMirror, type MirrorRoom, type MirrorSettings } from "./mirror";
+import {
+  PARTICLE_COLOUR_MODES,
+  createParticles,
+  type ParticleColourMode,
+  type ParticleRoom,
+  type ParticleSettings,
+} from "./particles";
 import { applyOffAxis, measureWindow, type WindowGeometry } from "./offAxis";
 import { ROOMS, isBoxRoom, type Placement, type Room, type RoomConfig, type SplatRoomConfig } from "./rooms";
 import { activeProfile, loadSettings, saveSettings, type DisplayProfile } from "./settings";
@@ -80,6 +88,7 @@ createIcons({
     Scan,
     ScanFace,
     Shuffle,
+    Sparkles,
     Trash,
     Upload,
     Zap,
@@ -88,7 +97,7 @@ createIcons({
 
 const settings = loadSettings();
 const tracker = new HeadTracker(settings);
-// Hands are only looked for in the mirror room, where they wipe the glass.
+// Hands are only looked for in the rooms that use them (the mirror and the particles).
 const handTracker = new HandTracker(tracker.video);
 const profile = (): DisplayProfile => activeProfile(settings);
 
@@ -183,7 +192,15 @@ function rebuild(): void {
       splatRoom = null;
       const depth = win.width * settings.roomDepth;
       room =
-        config.type === "mirror"
+        config.type === "particles"
+          ? createParticles(win.width, win.height, settings, {
+              renderer,
+              hands: handTracker,
+              cutout: () =>
+                tracker.cutout ? { cut: tracker.cutout, fresh: performance.now() - tracker.lastSeen < 400 } : null,
+              canvas,
+            })
+          : config.type === "mirror"
           ? createMirror(win.width, win.height, settings, {
               renderer,
               video: tracker.video,
@@ -201,7 +218,7 @@ function rebuild(): void {
     // Rooms like the aquarium bring their own haze and background.
     scene.fog = room?.fog ?? null;
     scene.background = room?.background ?? DEFAULT_BACKGROUND;
-    if (import.meta.env.DEV) Object.assign(window, { room, tracker, balls });
+    if (import.meta.env.DEV) Object.assign(window, { room, tracker, handTracker, balls });
   }
   syncHud();
 }
@@ -470,6 +487,8 @@ function syncHud(): void {
   aquariumOptions.hidden = config.type !== "aquarium";
   mirrorOptions.hidden = config.type !== "mirror";
   syncMirrorControls();
+  particleOptions.hidden = config.type !== "particles";
+  syncParticleControls();
   syncTankControls();
   el.cubeMode.value = settings.cubeColourMode;
   buildPaletteEditor();
@@ -862,6 +881,80 @@ for (const toggle of mirrorSwitches) {
 }
 $("btn-refog").addEventListener("click", () => {
   if (room && "refog" in room) (room as MirrorRoom).refog();
+});
+
+// ---------- Particle mirror ----------
+type NumericParticleKey = { [K in keyof ParticleSettings]: ParticleSettings[K] extends number ? K : never }[keyof ParticleSettings];
+type SwitchParticleKey = { [K in keyof ParticleSettings]: ParticleSettings[K] extends boolean ? K : never }[keyof ParticleSettings];
+const particleOptions = $("particle-options");
+const particleSliders = [...document.querySelectorAll<HTMLInputElement>('input[type="range"][data-particles]')];
+const particleSwitches = [...document.querySelectorAll<HTMLInputElement>('input[type="checkbox"][data-particles]')];
+const formatParticleValue: Record<NumericParticleKey, (v: number) => string> = {
+  partCount: (v) => `${Math.round((v * v) / 1000)}k`,
+  partSolid: percent,
+  partDepth: times,
+  partSize: times,
+  partRelief: percent,
+  partDot: times,
+  partDust: percent,
+  partSmear: percent,
+  partShatterEvery: (v) => (v > 0 ? `${Math.round(v)} s` : "Off"),
+  partHandSize: times,
+  partHandForce: times,
+  partTrail: times,
+};
+/** The particle count is the only setting that needs a new simulation; the rest are read every frame. */
+const rebuildsParticles = new Set<string>(["partCount"]);
+function showParticleValue(slider: HTMLInputElement): void {
+  const key = slider.dataset.particles as NumericParticleKey;
+  const out = slider.parentElement?.querySelector("output");
+  if (out) out.textContent = formatParticleValue[key](settings[key]);
+}
+const particleColourSelect = $<HTMLSelectElement>("in-part-colour-mode");
+for (const mode of PARTICLE_COLOUR_MODES) particleColourSelect.add(new Option(mode.name, mode.id));
+const particleTint = $<HTMLInputElement>("in-part-tint");
+function syncParticleControls(): void {
+  for (const slider of particleSliders) {
+    slider.value = String(settings[slider.dataset.particles as NumericParticleKey]);
+    showParticleValue(slider);
+  }
+  for (const toggle of particleSwitches) toggle.checked = settings[toggle.dataset.particles as SwitchParticleKey];
+  particleColourSelect.value = settings.partColourMode;
+  particleTint.value = settings.partTint;
+  $("part-tint-row").hidden = settings.partColourMode !== "tint";
+}
+for (const slider of particleSliders) {
+  slider.addEventListener("input", () => {
+    const key = slider.dataset.particles as NumericParticleKey;
+    settings[key] = parseFloat(slider.value);
+    showParticleValue(slider);
+    if (rebuildsParticles.has(key)) {
+      // A new simulation: build a fresh room rather than resize this one.
+      roomId = "";
+      commitSoon();
+    } else {
+      saveSettings(settings);
+    }
+  });
+}
+for (const toggle of particleSwitches) {
+  toggle.addEventListener("change", () => {
+    settings[toggle.dataset.particles as SwitchParticleKey] = toggle.checked;
+    saveSettings(settings);
+  });
+}
+particleColourSelect.addEventListener("change", () => {
+  settings.partColourMode = particleColourSelect.value as ParticleColourMode;
+  $("part-tint-row").hidden = settings.partColourMode !== "tint";
+  saveSettings(settings);
+  particleColourSelect.blur();
+});
+particleTint.addEventListener("input", () => {
+  settings.partTint = particleTint.value;
+  saveSettings(settings);
+});
+$("btn-shatter").addEventListener("click", () => {
+  if (room && "shatter" in room) (room as ParticleRoom).shatter();
 });
 
 // ---------- Aquarium ----------
@@ -1424,12 +1517,14 @@ function frame(now: number): void {
   last = now;
 
   tracker.update(now);
-  handTracker.enabled = currentConfig().type === "mirror";
+  const roomType = currentConfig().type;
+  handTracker.enabled = roomType === "mirror" || roomType === "particles";
   handTracker.update(now);
   updateEye(now, dt);
-  tracker.wantCutout = settings.showFigure && isBoxRoom(currentConfig());
+  const showFigure = settings.showFigure && isBoxRoom(currentConfig());
+  tracker.wantCutout = showFigure || roomType === "particles";
   figure.update(tracker, profile(), win, {
-    enabled: tracker.wantCutout,
+    enabled: showFigure,
     size: settings.figureSize,
     distanceEffect: settings.figureDistanceEffect,
     roomDepth: win.width * settings.roomDepth,

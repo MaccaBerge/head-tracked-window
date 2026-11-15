@@ -339,6 +339,80 @@
         </details>
       </section>
 
+      <section id="particle-options" class="group">
+        <h2 class="group-label">Particles</h2>
+        <p class="hint">Open hand pushes, fist pulls (open it to burst), one finger draws sparks. With the mouse: drag to push, right-drag or Shift-drag to pull.</p>
+        <label class="row"><span>Colour</span><select id="in-part-colour-mode"></select></label>
+        <label class="row" id="part-tint-row"><span>Tint</span><input id="in-part-tint" type="color" class="colour-field" /></label>
+        <label class="row" title="Loose drifting dust at 0%, a sharp portrait at 100%">
+          <span>Solid</span>
+          <span class="slider"><input data-particles="partSolid" type="range" min="0" max="1" step="0.05" /><output></output></span>
+        </label>
+        <div class="buttons">
+          <button id="btn-shatter" title="Break the figure apart; it gathers again a moment later"><i data-lucide="sparkles"></i>Shatter</button>
+        </div>
+        <details id="sec-part-shape" class="fold">
+          <summary><i data-lucide="chevron-right"></i>Shape</summary>
+          <div class="section">
+            <label class="row" title="How far behind the glass you stand, in window heights">
+              <span>Depth</span>
+              <span class="slider"><input data-particles="partDepth" type="range" min="0.1" max="2" step="0.05" /><output></output></span>
+            </label>
+            <label class="row" title="Size of your figure: 1 fills the window">
+              <span>Size</span>
+              <span class="slider"><input data-particles="partSize" type="range" min="0.4" max="1.6" step="0.05" /><output></output></span>
+            </label>
+            <label class="row" title="How much your figure bulges towards you">
+              <span>Relief</span>
+              <span class="slider"><input data-particles="partRelief" type="range" min="0" max="1.5" step="0.05" /><output></output></span>
+            </label>
+            <label class="row" title="Size of each particle">
+              <span>Grain size</span>
+              <span class="slider"><input data-particles="partDot" type="range" min="0.3" max="3" step="0.05" /><output></output></span>
+            </label>
+            <label class="row" title="How many particles there are. More looks sharper and costs more">
+              <span>Particles</span>
+              <span class="slider"><input data-particles="partCount" type="range" min="128" max="768" step="64" /><output></output></span>
+            </label>
+          </div>
+        </details>
+        <details id="sec-part-motion" class="fold">
+          <summary><i data-lucide="chevron-right"></i>Movement</summary>
+          <div class="section">
+            <label class="row" title="How restless the loose dust is">
+              <span>Dust drift</span>
+              <span class="slider"><input data-particles="partDust" type="range" min="0" max="1" step="0.05" /><output></output></span>
+            </label>
+            <label class="row" title="How much moving fast smears your figure and leaves it trailing behind you">
+              <span>Smear</span>
+              <span class="slider"><input data-particles="partSmear" type="range" min="0" max="1" step="0.05" /><output></output></span>
+            </label>
+            <label class="row" title="Shatter by itself every so many seconds">
+              <span>Auto shatter</span>
+              <span class="slider"><input data-particles="partShatterEvery" type="range" min="0" max="60" step="5" /><output></output></span>
+            </label>
+          </div>
+        </details>
+        <details id="sec-part-hands" class="fold">
+          <summary><i data-lucide="chevron-right"></i>Hands</summary>
+          <div class="section">
+            <label class="row" title="How far a hand's push and pull reaches">
+              <span>Reach</span>
+              <span class="slider"><input data-particles="partHandSize" type="range" min="0.3" max="2.5" step="0.05" /><output></output></span>
+            </label>
+            <label class="row" title="How strongly a hand pushes and pulls">
+              <span>Strength</span>
+              <span class="slider"><input data-particles="partHandForce" type="range" min="0.2" max="3" step="0.05" /><output></output></span>
+            </label>
+            <label class="row" title="How long the sparks drawn with one finger last">
+              <span>Sparkler trail</span>
+              <span class="slider"><input data-particles="partTrail" type="range" min="0" max="3" step="0.1" /><output></output></span>
+            </label>
+            <label class="row"><span>Show hands</span><input data-particles="partShowHands" type="checkbox" class="switch" role="switch" /></label>
+          </div>
+        </details>
+      </section>
+
       <section id="cube-options" class="group">
         <h2 class="group-label">Colours</h2>
         <label class="row">
