@@ -93,20 +93,58 @@ svg.lucide {
   flex-direction: column;
   overflow-y: auto;
   scrollbar-width: thin;
-  scrollbar-color: var(--raised) transparent;
+  /* Thumb at 3.4:1 against the panel (needs 3:1 to be seen). */
+  scrollbar-color: #6b6b70 transparent;
   background: rgba(20, 20, 21, 0.96);
   border: 1px solid var(--hair);
   border-radius: 16px;
   box-shadow: 0 12px 32px rgba(0, 0, 0, 0.32);
-  animation: panel-in 320ms var(--ease) both;
+
+  /*
+   * Showing and hiding: the panel slides in from the edge it's docked to and
+   * fades in, and slides back out as it fades. The exit runs before
+   * display: none applies (allow-discrete); the entry starts from
+   * @starting-style. A slightly quicker exit than entry, as menus do.
+   */
+  opacity: 1;
+  translate: 0 0;
+  transition:
+    display 180ms,
+    opacity 180ms var(--ease),
+    translate 180ms var(--ease);
+  /* Separate from the shorthand, so older browsers don't drop the whole transition */
+  transition-behavior: allow-discrete;
+}
+#hud:not(.hidden) {
+  transition-duration: 260ms;
+}
+@starting-style {
+  #hud {
+    opacity: 0;
+    translate: -24px 0;
+  }
+}
+/* [data-closing] is the exit state for browsers that can't transition display (see main.ts). */
+#hud:where(.hidden, [data-closing]) {
+  opacity: 0;
+  translate: -24px 0;
 }
 #hud.hidden {
   display: none;
 }
-@keyframes panel-in {
-  from {
-    opacity: 0;
-    transform: translateY(8px);
+/* Reduced motion: a quick fade, no sliding. */
+@media (prefers-reduced-motion: reduce) {
+  #hud,
+  #hud:not(.hidden) {
+    transition-duration: 120ms;
+  }
+  #hud:where(.hidden, [data-closing]) {
+    translate: none;
+  }
+  @starting-style {
+    #hud {
+      translate: none;
+    }
   }
 }
 
@@ -215,9 +253,12 @@ svg.lucide {
 .vf-empty {
   position: absolute;
   inset: 0;
-  z-index: 1;
-  display: grid;
-  place-items: center;
+  z-index: 3;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
 }
 .vf-empty svg.lucide {
   width: 20px;
@@ -414,10 +455,14 @@ input[type="range"]::-webkit-slider-thumb {
   border-radius: 6px;
   background: var(--text);
   box-shadow: 0 0 0 3px var(--panel);
-  transition: transform var(--fast) var(--ease);
+  @media (prefers-reduced-motion: no-preference) {
+    transition: transform var(--fast) var(--ease);
+  }
 }
-input[type="range"]:active::-webkit-slider-thumb {
-  transform: scale(0.92);
+@media (prefers-reduced-motion: no-preference) {
+  input[type="range"]:active::-webkit-slider-thumb {
+    transform: scale(0.92);
+  }
 }
 input[type="range"]::-moz-range-track {
   height: 4px;
@@ -461,7 +506,10 @@ input.switch::before {
   height: 14px;
   border-radius: 7px;
   background: var(--muted);
-  transition: transform var(--fast) var(--ease), background-color var(--fast) var(--ease);
+  transition: background-color var(--fast) var(--ease);
+  @media (prefers-reduced-motion: no-preference) {
+    transition: transform var(--fast) var(--ease), background-color var(--fast) var(--ease);
+  }
 }
 input.switch:checked {
   background: var(--accent);
@@ -504,14 +552,22 @@ button {
   transition:
     background-color var(--fast) var(--ease),
     border-color var(--fast) var(--ease),
-    color var(--fast) var(--ease),
-    transform var(--fast) var(--ease);
+    color var(--fast) var(--ease);
+  @media (prefers-reduced-motion: no-preference) {
+    transition:
+      background-color var(--fast) var(--ease),
+      border-color var(--fast) var(--ease),
+      color var(--fast) var(--ease),
+      transform var(--fast) var(--ease);
+  }
 }
 button:hover {
   background: var(--raised-hover);
 }
-button:active {
-  transform: scale(0.98);
+@media (prefers-reduced-motion: no-preference) {
+  button:active {
+    transform: scale(0.98);
+  }
 }
 button:disabled {
   opacity: 0.4;
@@ -568,8 +624,10 @@ details.fold > summary {
 details.fold > summary::-webkit-details-marker {
   display: none;
 }
-details.fold > summary svg.lucide {
-  transition: transform var(--fast) var(--ease);
+@media (prefers-reduced-motion: no-preference) {
+  details.fold > summary svg.lucide {
+    transition: transform var(--fast) var(--ease);
+  }
 }
 details.fold[open] > summary svg.lucide {
   transform: rotate(90deg);
@@ -725,4 +783,104 @@ details.fold > .section {
 #drop-hint svg.lucide {
   width: 24px;
   height: 24px;
+}
+
+/* ---------- Accessibility helpers ---------- */
+
+/* Read by screen readers, not shown. */
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* Keycaps only mean something while the single-key shortcuts are on. */
+body.no-shortcuts kbd {
+  display: none;
+}
+
+.hud-foot .toggles + .toggles {
+  margin-top: 4px;
+}
+
+/* Brings the panel back when it's hidden, without needing the keyboard. */
+#btn-show-hud {
+  position: fixed;
+  top: 16px;
+  left: 16px;
+  background: rgba(20, 20, 21, 0.9);
+  transition: opacity 180ms var(--ease);
+}
+/* Fades in once the panel has slid away. */
+@starting-style {
+  #btn-show-hud {
+    opacity: 0;
+  }
+}
+
+/* A colour picker standing alone in a row (the ball colour). */
+input.colour-field {
+  width: 40px;
+  height: 28px;
+  padding: 0;
+  border: 1px solid var(--hair-strong);
+  border-radius: 6px;
+  background: var(--raised);
+  cursor: pointer;
+}
+input.colour-field::-webkit-color-swatch-wrapper {
+  padding: 0;
+}
+input.colour-field::-webkit-color-swatch {
+  border: none;
+  border-radius: 5px;
+}
+input.colour-field::-moz-color-swatch {
+  border: none;
+  border-radius: 5px;
+}
+
+/*
+ * The footer (view toggles and their keycaps) stays pinned to the bottom of
+ * the panel while the settings above it scroll, so it's always in reach.
+ * The negative margins reach the panel's padding so it sits flush.
+ */
+#hud > .hud-foot {
+  position: sticky;
+  bottom: -16px;
+  z-index: 1;
+  margin: 16px -16px -16px;
+  padding: 12px 16px 16px;
+  background: rgba(20, 20, 21, 0.98);
+  border-top: 1px solid var(--hair);
+  border-radius: 0 0 16px 16px;
+}
+
+/* "Keyboard shortcuts are off. Turn on" under the view toggles. */
+.shortcuts-off {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 8px;
+}
+button.link-button {
+  height: auto;
+  padding: 0;
+  background: none;
+  border: none;
+  box-shadow: none;
+  color: var(--text);
+  font-weight: 500;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+button.link-button:hover {
+  background: none;
+  color: var(--accent);
 }

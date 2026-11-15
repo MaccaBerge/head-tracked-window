@@ -1,3 +1,4 @@
+import { BALL_DEFAULTS, type BallSettings } from "./balls";
 import { CUBE_DEFAULTS, type CubeRoomSettings } from "./cubeRoom";
 import type { Placement } from "./rooms";
 
@@ -21,9 +22,13 @@ export interface DisplayProfile {
   cameraTiltDeg: number;
 }
 
-export interface Settings extends CubeRoomSettings {
+export interface Settings extends CubeRoomSettings, BallSettings {
   /** The view follows the viewer's head (or the mouse). Off: a fixed view straight ahead. */
   followHead: boolean;
+  /** Single-letter keyboard shortcuts (H, F, M, P). Can be turned off (WCAG 2.1.4). */
+  shortcuts: boolean;
+  /** True once the person has used the shortcuts switch; until then shortcuts are always on. */
+  shortcutsChosen: boolean;
   profiles: DisplayProfile[];
   profileId: string;
   /** Which room is showing. */
@@ -41,6 +46,10 @@ export interface Settings extends CubeRoomSettings {
   /** Size of the figure: 1 is a person to scale with a 2.5 m tall room. */
   figureSize: number;
   showHud: boolean;
+}
+
+function prefersReducedMotion(): boolean {
+  return typeof matchMedia === "function" && matchMedia("(prefers-reduced-motion: reduce)").matches;
 }
 
 function defaults(): Settings {
@@ -71,6 +80,8 @@ function defaults(): Settings {
       },
     ],
     followHead: true,
+    shortcuts: true,
+    shortcutsChosen: false,
     profileId: "macbook",
     roomId: "grid",
     placements: {},
@@ -80,6 +91,9 @@ function defaults(): Settings {
     figureDistanceEffect: 1,
     figureSize: 1,
     ...CUBE_DEFAULTS,
+    ...BALL_DEFAULTS,
+    // For people who've asked their system for less motion, the cube walls start still.
+    cubeMotion: prefersReducedMotion() ? "none" : CUBE_DEFAULTS.cubeMotion,
     cubePalettes: {},
     showHud: true,
   };
@@ -103,6 +117,12 @@ export function loadSettings(): Settings {
       // Earlier versions had an on/off switch for the rippling cubes.
       if (parsed.cubeRipple === false && parsed.cubeMotion === undefined) s.cubeMotion = "none";
       delete (s as Partial<{ cubeRipple: boolean }>).cubeRipple;
+      // Shortcuts are off only if the person turned them off. An earlier version
+      // could save "off" by accident, which this undoes.
+      if (s.shortcutsChosen !== true || typeof s.shortcuts !== "boolean") {
+        s.shortcuts = true;
+        s.shortcutsChosen = false;
+      }
       if (Array.isArray(s.profiles) && s.profiles.length) return s;
     }
     // Carry over the screen size and calibration from the first version.
