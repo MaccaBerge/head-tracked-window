@@ -33,6 +33,9 @@ instead of the camera, **P** turns head tracking of the view on and off.
   glass fish tank). Fish school, come up to the glass to look at you, dart away
   when you move suddenly, and swim in and out of a hole in the wreck. Reef,
   sails, light and fish are adjustable in the panel.
+- **Fogged mirror**: your reflection (the webcam) in a steamed-up mirror. Wipe
+  it clear with an open hand or draw in it with one finger (or the mouse); the
+  fog creeps back, frost grows in from the edges, and drops run down the glass.
 - **Splat rooms**: Gaussian splat scenes (`.ply`, `.spz`, `.splat`, `.ksplat`,
   `.sog`). Drag a file onto the page to add it, or put it in `public/splats/`
   and add an entry in `src/rooms.ts`. Placement behind the window is adjusted in
@@ -49,7 +52,8 @@ files exist.
 
 - **Head tracking**: MediaPipe Pose Landmarker in the browser finds the viewer,
   locks onto one person, and estimates eye position and distance from body
-  proportions (`src/headTracker.ts`).
+  proportions (`src/headTracker.ts`). In the mirror room, MediaPipe Hand
+  Landmarker tells an open hand from a pointing finger (`src/handTracker.ts`).
 - **Off-axis projection**: the camera frustum is fitted to the physical screen
   from the eye position (`src/offAxis.ts`), with display size and webcam
   position stored per display profile.
