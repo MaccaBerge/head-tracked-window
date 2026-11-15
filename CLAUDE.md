@@ -57,7 +57,8 @@ npm run build          # type check + production build
 - Add a room: a config type and entry in `ROOMS` (`rooms.ts`), a branch in
   `rebuild()` (`main.ts`), its panel section shown or hidden in `syncHud()`.
 - **Tracking**: `headTracker.ts` (pose model, sticky lock on one person,
-  OneEuro filtering, optional person cutout). `handTracker.ts` (hand model,
+  OneEuro filtering, optional person cutout: segmenter mask clipped to a body
+  shape from the skeleton in `bodyGate.ts`, then `maskCleaner.ts`). `handTracker.ts` (hand model,
   palm / point / fist) runs only in the mirror and particle rooms. Both
   lazy-load MediaPipe. The particle room also turns on the person cutout.
 - Splat rooms lazy-load Spark; keep heavy libraries out of the first download.
