@@ -1,4 +1,4 @@
-import type { Group, Vector3 } from "three";
+import type { Color, Fog, FogExp2, Group, Vector3 } from "three";
 import type { WindowGeometry } from "./offAxis";
 
 /** Something that can be shown behind the window. */
@@ -6,10 +6,19 @@ export interface Room {
   group: Group;
   /** Hide everything in front of the window pane (no pop-out). */
   clipAtWindow?: boolean;
+  /** Haze the whole scene fades into with distance (water, for example). */
+  fog?: Fog | FogExp2;
+  /** What's seen where there's nothing else. */
+  background?: Color;
   /** Download progress from 0 to 1 while the room is loading; absent once ready. */
   loading?: number;
-  /** Called every frame with the viewer's eye position (window space, metres); rooms can animate here. */
-  update(timeS: number, eye?: Vector3): void;
+  /**
+   * Called every frame; rooms can animate here.
+   * @param eye Where the view is drawn from (window space, metres). Fixed straight ahead when Follow head is off.
+   * @param viewer Where the person really is, from the head tracker or the mouse; undefined while nobody is seen.
+   *   Use this for anything that reacts to the person, so it keeps working with Follow head off.
+   */
+  update(timeS: number, eye?: Vector3, viewer?: Vector3): void;
   /** Called when the window changes size. Rooms without it are rebuilt instead. */
   resize?(win: WindowGeometry): void;
   dispose(): void;

@@ -1,10 +1,11 @@
-import {
-  FilesetResolver,
+// Types only: the MediaPipe library itself is loaded when the camera starts,
+// so it isn't part of the first download.
+import type {
+  Landmark,
+  MPMask,
+  NormalizedLandmark,
   PoseLandmarker,
-  type Landmark,
-  type MPMask,
-  type NormalizedLandmark,
-  type PoseLandmarkerResult,
+  PoseLandmarkerResult,
 } from "@mediapipe/tasks-vision";
 import { MaskCleaner } from "./maskCleaner";
 import { OneEuroFilter } from "./oneEuro";
@@ -34,7 +35,8 @@ const RELOCK_AFTER_MS = 1500;
 /** Rough width of a head in metres, used to scale the "same person?" test. */
 const HEAD_WIDTH_M = 0.16;
 
-export type TrackerStatus = "loading" | "searching" | "tracking" | "no-camera";
+/** "idle": the camera hasn't been started yet (it waits for a click unless access was already granted). */
+export type TrackerStatus = "idle" | "loading" | "searching" | "tracking" | "no-camera";
 
 export interface PersonDebug {
   /** Normalised image coordinates (0..1) of the point between the eyes. */
@@ -81,7 +83,7 @@ interface Candidate {
  */
 export class HeadTracker {
   readonly video = document.createElement("video");
-  status: TrackerStatus = "loading";
+  status: TrackerStatus = "idle";
   error = "";
   /** Filtered eye position, or null while nobody is locked. */
   head: { x: number; y: number; z: number } | null = null;
@@ -121,6 +123,10 @@ export class HeadTracker {
   }
 
   async start(): Promise<void> {
+    // Already starting or running.
+    if (this.status !== "idle" && this.status !== "no-camera") return;
+    this.status = "loading";
+    this.error = "";
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
         video: { width: { ideal: 1280 }, height: { ideal: 720 }, frameRate: { ideal: 60 } },
@@ -134,6 +140,7 @@ export class HeadTracker {
       return;
     }
     try {
+      const { FilesetResolver, PoseLandmarker } = await import("@mediapipe/tasks-vision");
       const fileset = await FilesetResolver.forVisionTasks(`${import.meta.env.BASE_URL}mediapipe-wasm`);
       this.landmarker = await PoseLandmarker.createFromOptions(fileset, {
         baseOptions: { modelAssetPath: MODEL_URL, delegate: "GPU" },

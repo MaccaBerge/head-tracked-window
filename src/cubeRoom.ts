@@ -158,8 +158,24 @@ export interface RoomBounds {
   depth: number;
 }
 
+/** Where a wall's surface is under a point, for things bouncing off it. */
+export interface WallSurface {
+  /** How far the surface stands into the room from the wall's base line, in metres (negative in a hole). */
+  offset: number;
+  /** How fast it's moving into the room, in metres per second (cubes pushed out by the movement). */
+  velocity: number;
+}
+
+export interface CubeCollider {
+  /** The surface of a wall under point `p` (window space). */
+  surface(wall: WallKey, p: THREE.Vector3): WallSurface;
+  /** The colour the room's current effect gives point `p`, for things inside the room. */
+  colourAt(p: THREE.Vector3, seed: number, target: THREE.Color): THREE.Color;
+}
+
 export interface CubeRoom extends Room {
   bounds: RoomBounds;
+  collider: CubeCollider;
 }
 
 /**
@@ -193,7 +209,7 @@ interface Spot {
 }
 
 /** Which wall a cube or surface belongs to, for hiding the stretches in front of the screen. */
-type WallKey = "floor" | "ceiling" | "left" | "right" | "back";
+export type WallKey = "floor" | "ceiling" | "left" | "right" | "back";
 
 interface Cube extends Spot {
   /** Centre of the cube's inner face, which sits on the room's boundary. */
@@ -213,6 +229,8 @@ interface Cube extends Spot {
   missing: boolean;
   /** The cube's own tilt. */
   rotation: THREE.Quaternion;
+  /** Its block on the wall, along the wall's two directions: [u from, u to, v from, v to]. */
+  rect: [number, number, number, number];
   /** The direction each travelling wave moves across this cube, along the wall. */
   travel: Record<"ripple" | "rising" | "swirl", THREE.Vector3>;
   /** A random axis along the wall, for tipping when the movement has no direction. */
@@ -222,7 +240,13 @@ interface Cube extends Spot {
 }
 
 /** Shared by every cube room built, so rebuilding (e.g. a layout change) doesn't restart the animation. */
-const clock = { colour: 0, motion: 0 };
+const clock = { colour: 0, motion: 0, flicker: 0 };
+/**
+ * The fire flicker runs on its own clock that never goes faster than normal
+ * speed, and its fastest wobble is about 2 Hz. Content must not flash more
+ * than three times a second, whatever the colour speed is set to.
+ */
+const MAX_FLICKER_SPEED = 1;
 
 /**
  * A box-shaped room, the same size and place as the grid room, whose floor,
@@ -282,7 +306,11 @@ export function createCubeRoom(
    * of the wall, `u` and `v` run along its two sides (lengths `lu` and `lv`),
    * and `normal` points into the room.
    */
+  /** Each wall's frame, for finding the cube under a point (see buildWallLookup). */
+  const wallFrames = new Map<WallKey, { origin: THREE.Vector3; u: THREE.Vector3; v: THREE.Vector3; lu: number; lv: number; cubes: number[] }>();
   const coverWall = (origin: THREE.Vector3, u: THREE.Vector3, lu: number, v: THREE.Vector3, lv: number, normal: THREE.Vector3) => {
+    const wallCubes: number[] = [];
+    wallFrames.set(wallOf(normal), { origin, u, v, lu, lv, cubes: wallCubes });
     /** One cube filling the block of size su × sv centred at (cu, cv) on the wall. */
     const leaf = (su: number, sv: number, cu: number, cv: number) => {
       // Decide everything random first, so leaving a cube out doesn't shift the rest.
@@ -303,8 +331,10 @@ export function createCubeRoom(
         .setFromAxisAngle(normal, (spin[0] - 0.5) * 2 * tilt)
         .multiply(new THREE.Quaternion().setFromAxisAngle(u, (spin[1] - 0.5) * tilt))
         .multiply(new THREE.Quaternion().setFromAxisAngle(v, (spin[2] - 0.5) * tilt));
+      wallCubes.push(cubes.length);
       cubes.push({
         ...spotAt(face, normal, seed),
+        rect: [cu - su / 2, cu + su / 2, cv - sv / 2, cv + sv / 2],
         face,
         normal,
         size,
@@ -431,6 +461,65 @@ export function createCubeRoom(
   }
   // A little extra room behind the deepest cube.
   const sinkGap = 0.05 * big;
+
+  // ---------- Surfaces for collisions ----------
+  // How far each cube's inner face stands into the room right now, and how
+  // fast it's moving. A missing cube is a hole down to the glowing surface.
+  const faceOffset = new Float32Array(cubes.length);
+  const previousOffset = new Float32Array(cubes.length);
+  const faceVelocity = new Float32Array(cubes.length);
+  cubes.forEach((c, i) => (faceOffset[i] = c.missing ? -(sinkOf[c.wall] + sinkGap) : c.relief));
+  // A coarse grid per wall listing the cubes that overlap each cell, so the
+  // cube under a point is found by checking a handful of blocks.
+  const lookupCell = big / 4;
+  const lookup = new Map<WallKey, { nu: number; nv: number; cells: number[][] }>();
+  for (const [key, w] of wallFrames) {
+    const nu = Math.max(1, Math.ceil(w.lu / lookupCell));
+    const nv = Math.max(1, Math.ceil(w.lv / lookupCell));
+    const cells: number[][] = Array.from({ length: nu * nv }, () => []);
+    for (const i of w.cubes) {
+      const [u0, u1, v0, v1] = cubes[i].rect;
+      for (let a = Math.max(0, Math.floor(u0 / lookupCell)); a <= Math.min(nu - 1, Math.floor((u1 - 1e-9) / lookupCell)); a++) {
+        for (let b = Math.max(0, Math.floor(v0 / lookupCell)); b <= Math.min(nv - 1, Math.floor((v1 - 1e-9) / lookupCell)); b++) {
+          cells[b * nu + a].push(i);
+        }
+      }
+    }
+    lookup.set(key, { nu, nv, cells });
+  }
+  const local = new THREE.Vector3();
+  const noSurface: WallSurface = { offset: 0, velocity: 0 };
+  const surfaceResult: WallSurface = { offset: 0, velocity: 0 };
+  /** Set each frame to that frame's colour function (see update). */
+  let paintFrame: ((target: THREE.Color, s: Spot, smooth: boolean) => THREE.Color) | null = null;
+  const sideways = new THREE.Vector3(1, 0, 0);
+
+  const collider: CubeCollider = {
+    surface(wall, p) {
+      const frame = wallFrames.get(wall);
+      const grid = lookup.get(wall);
+      if (!frame || !grid) return noSurface;
+      local.subVectors(p, frame.origin);
+      const pu = local.dot(frame.u);
+      const pv = local.dot(frame.v);
+      const a = Math.floor(pu / lookupCell);
+      const b = Math.floor(pv / lookupCell);
+      if (a < 0 || b < 0 || a >= grid.nu || b >= grid.nv) return noSurface;
+      for (const i of grid.cells[b * grid.nu + a]) {
+        const [u0, u1, v0, v1] = cubes[i].rect;
+        if (pu >= u0 && pu <= u1 && pv >= v0 && pv <= v1) {
+          surfaceResult.offset = faceOffset[i];
+          surfaceResult.velocity = faceVelocity[i];
+          return surfaceResult;
+        }
+      }
+      return noSurface;
+    },
+    colourAt(p, seed, target) {
+      if (!paintFrame) return target.set(0xffffff);
+      return paintFrame(target, spotAt(p, sideways, seed), false);
+    },
+  };
   // The sealed box the surfaces form: every side pushed back behind its own
   // cubes, and every surface stretched to meet its neighbours, so the corners
   // close and no black shows between them.
@@ -583,6 +672,7 @@ export function createCubeRoom(
       const theta = motionAngle(c, time, motion);
       const push = motion === "none" ? 0 : amount * c.thickness * (0.5 + 0.5 * Math.sin(theta));
       // Sink the cube into the wall so its inner face is on the boundary, then push it out.
+      faceOffset[i] = c.relief + push;
       const d = c.relief + push - c.thickness / 2;
       position.copy(c.face).addScaledVector(c.normal, d);
       // The movement's turn is applied on top of the cube's own tilt.
@@ -598,10 +688,12 @@ export function createCubeRoom(
   const room: CubeRoom = {
     group,
     bounds: { halfWidth: hw, halfHeight: hh, depth },
+    collider,
     update(timeS, eye) {
       const dt = lastTime < 0 ? 0 : Math.min(0.1, timeS - lastTime);
       lastTime = timeS;
       clock.colour += dt * settings.cubeSpeed;
+      clock.flicker += dt * Math.min(settings.cubeSpeed, MAX_FLICKER_SPEED);
       clock.motion += dt * settings.cubeMotionSpeed;
 
       let changed = false;
@@ -623,12 +715,19 @@ export function createCubeRoom(
       const motion = settings.cubeMotion;
       const isMoving = motion !== "none" && (settings.cubeMotionAmount > 0 || turning);
       if (isMoving || moving || changed) {
+        previousOffset.set(faceOffset);
         placeCubes(clock.motion, motion);
+        // How fast each face moved this frame: moving cubes push what touches them.
+        for (let i = 0; i < faceOffset.length; i++) {
+          faceVelocity[i] = isMoving && dt > 0 ? (faceOffset[i] - previousOffset[i]) / dt : 0;
+        }
         moving = isMoving;
       }
 
       const mode = settings.cubeColourMode;
       const time = clock.colour;
+      // At most 13 rad/s ≈ 2.1 Hz: below the three-flashes-a-second limit.
+      const flickerTime = clock.flicker;
       palette.use(paletteFor(settings, mode));
       const n = palette.count;
       // The rainbow wave slides in and then back out: a triangle wave makes it
@@ -692,7 +791,7 @@ export function createCubeRoom(
           case "fire": {
             // Hottest colours at the bottom, cooler higher up, every cube flickering.
             const flicker =
-              0.6 + 0.25 * Math.sin(time * 9 + s.seed * 50) + 0.15 * Math.sin(time * 23 + s.seed * 90);
+              0.6 + 0.25 * Math.sin(flickerTime * 6 + s.seed * 50) + 0.15 * Math.sin(flickerTime * 13 + s.seed * 90);
             const heat = Math.min(1, Math.max(0, 1 - s.fall * 0.9) * flicker);
             palette.ramp(target, heat).multiplyScalar(0.35 + 0.65 * heat);
             break;
@@ -708,6 +807,7 @@ export function createCubeRoom(
         }
         return target;
       };
+      paintFrame = paint;
 
       cubes.forEach((c, i) => {
         const k = cubeIndex[i];

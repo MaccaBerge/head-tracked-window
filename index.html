@@ -3,12 +3,17 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <!-- Dark only: lets the browser paint a dark canvas before the CSS arrives -->
+    <meta name="color-scheme" content="dark" />
     <title>Window Room</title>
     <link rel="stylesheet" href="/src/style.css" />
   </head>
   <body>
     <canvas id="scene"></canvas>
     <div id="loading" hidden></div>
+    <!-- Screen-reader announcements (notices and loading), kept separate from the per-frame status line -->
+    <div id="announcer" class="visually-hidden" role="status"></div>
+    <button id="btn-show-hud" class="icon-only" aria-label="Show panel" hidden><i data-lucide="panel-left-open"></i></button>
     <div id="drop-hint" hidden>
       <i data-lucide="upload"></i>
       <span>Drop a splat file to add it as a room</span>
@@ -27,7 +32,10 @@
           <canvas id="preview-overlay"></canvas>
           <span class="vf-corner tl"></span><span class="vf-corner tr"></span>
           <span class="vf-corner bl"></span><span class="vf-corner br"></span>
-          <span class="vf-empty"><i data-lucide="camera-off"></i></span>
+          <span class="vf-empty">
+            <i data-lucide="camera-off"></i>
+            <button id="btn-camera" hidden><i data-lucide="camera"></i><span>Start camera</span></button>
+          </span>
         </div>
         <div class="status-line">
           <span id="status-dot"></span>
@@ -64,13 +72,13 @@
         </label>
         <label class="row" id="objects-row">
           <span>Depth targets</span>
-          <input id="in-objects" type="checkbox" class="switch" />
+          <input id="in-objects" type="checkbox" class="switch" role="switch" />
         </label>
 
         <h2 class="group-label">You in the room</h2>
         <label class="row">
           <span>Show me</span>
-          <input id="in-figure" type="checkbox" class="switch" />
+          <input id="in-figure" type="checkbox" class="switch" role="switch" />
         </label>
         <label class="row" title="How big you are compared with the room. At 1×, a grown-up is about two thirds of the room's height.">
           <span>Size</span>
@@ -83,6 +91,7 @@
       </section>
 
       <!-- Cube room -->
+      <!-- Aquarium -->
       <section id="cube-options" class="group">
         <h2 class="group-label">Colours</h2>
         <label class="row">
@@ -145,6 +154,62 @@
             <div class="buttons">
               <button id="btn-cube-shuffle" title="A new random arrangement"><i data-lucide="shuffle"></i>Shuffle</button>
               <button id="btn-cube-layout-reset"><i data-lucide="rotate-ccw"></i>Reset</button>
+            </div>
+          </div>
+        </details>
+
+        <details id="sec-balls" class="fold">
+          <summary><i data-lucide="chevron-right"></i>Balls</summary>
+          <div class="section">
+            <label class="row" title="How many balls are in the room">
+              <span>Count</span>
+              <span class="slider"><input data-ball="ballCount" type="range" min="0" max="200" step="1" /><output></output></span>
+            </label>
+            <label class="row" title="How big the balls are, compared with the room">
+              <span>Size</span>
+              <span class="slider"><input data-ball="ballSize" type="range" min="0.3" max="4" step="0.05" /><output></output></span>
+            </label>
+            <label class="row" title="How much sizes differ between balls. Bigger balls are heavier.">
+              <span>Size variety</span>
+              <span class="slider"><input data-ball="ballSizeVariety" type="range" min="0" max="1" step="0.05" /><output></output></span>
+            </label>
+            <label class="row" title="How much speed a ball keeps when it bounces">
+              <span>Bounce</span>
+              <span class="slider"><input data-ball="ballBounce" type="range" min="0" max="1" step="0.01" /><output></output></span>
+            </label>
+            <label class="row" title="0 floats as in zero gravity">
+              <span>Gravity</span>
+              <span class="slider"><input data-ball="ballGravity" type="range" min="0" max="2" step="0.05" /><output></output></span>
+            </label>
+            <label class="row" title="Air resistance">
+              <span>Air drag</span>
+              <span class="slider"><input data-ball="ballDrag" type="range" min="0" max="1" step="0.02" /><output></output></span>
+            </label>
+            <label class="row" title="How much walls and floor slow a ball sliding along them">
+              <span>Friction</span>
+              <span class="slider"><input data-ball="ballFriction" type="range" min="0" max="1" step="0.02" /><output></output></span>
+            </label>
+            <label class="row">
+              <span>Bump each other</span>
+              <input data-ball="ballCollide" type="checkbox" class="switch" role="switch" />
+            </label>
+            <label class="row" title="Cubes the movement pushes out kick the balls along">
+              <span>Cubes push balls</span>
+              <input data-ball="ballCubesPush" type="checkbox" class="switch" role="switch" />
+            </label>
+            <label class="row"><span>Colour</span><select id="in-ball-colour-mode"></select></label>
+            <label class="row" id="ball-colour-row"><span>Ball colour</span><input id="in-ball-colour" type="color" class="colour-field" /></label>
+            <label class="row" title="Matte to glossy">
+              <span>Shine</span>
+              <span class="slider"><input data-ball="ballShine" type="range" min="0" max="1" step="0.05" /><output></output></span>
+            </label>
+            <label class="row" title="How much the balls light up in their own colour">
+              <span>Glow</span>
+              <span class="slider"><input data-ball="ballGlow" type="range" min="0" max="1.5" step="0.05" /><output></output></span>
+            </label>
+            <div class="buttons">
+              <button id="btn-balls-drop" title="Start again from the top"><i data-lucide="arrow-down-to-line"></i>Drop</button>
+              <button id="btn-balls-shake" title="Give every ball a kick"><i data-lucide="zap"></i>Shake</button>
             </div>
           </div>
         </details>
@@ -224,6 +289,10 @@
           <label class="row"><span>Right of centre</span><span class="unit"><input id="in-cam-side" type="number" step="1" /><i>cm</i></span></label>
           <label class="row"><span>In front of screen</span><span class="unit"><input id="in-cam-forward" type="number" step="1" /><i>cm</i></span></label>
           <label class="row"><span>Tilted upwards</span><span class="unit"><input id="in-cam-tilt" type="number" step="1" /><i>°</i></span></label>
+          <label class="row" title="H, F, M and P. Turn off if they get in the way of a screen reader or other keyboard use.">
+            <span>Single-key shortcuts</span>
+            <input id="in-shortcuts" type="checkbox" class="switch" role="switch" />
+          </label>
           <button id="btn-calibrate" class="wide" title="Sit with your eyes 50 cm from the camera, then press">
             <i data-lucide="crosshair"></i>Calibrate at 50 cm
           </button>
@@ -242,7 +311,13 @@
             <i data-lucide="maximize"></i>Fullscreen<kbd>F</kbd>
           </button>
         </div>
-        <p class="hint"><kbd>H</kbd> hides this panel</p>
+        <div class="toggles">
+          <button id="btn-hide-hud"><i data-lucide="panel-left-close"></i>Hide panel<kbd>H</kbd></button>
+        </div>
+        <p class="hint shortcuts-off" id="shortcuts-off" hidden>
+          Keyboard shortcuts are off.
+          <button id="btn-shortcuts-on" class="link-button">Turn on</button>
+        </p>
       </footer>
     </aside>
 

@@ -2,7 +2,9 @@ import "@fontsource/geist-sans/400.css";
 import "@fontsource/geist-sans/500.css";
 import "@fontsource/geist-mono/400.css";
 import {
+  ArrowDownToLine,
   ArrowUpDown,
+  Camera,
   CameraOff,
   ChevronRight,
   Copy,
@@ -13,6 +15,8 @@ import {
   Minus,
   MousePointer2,
   Move,
+  PanelLeftClose,
+  PanelLeftOpen,
   Plus,
   RotateCcw,
   Scan,
@@ -21,11 +25,12 @@ import {
   Trash,
   Upload,
   X,
+  Zap,
   createElement,
   createIcons,
 } from "lucide";
 import * as THREE from "three";
-import { SparkRenderer } from "@sparkjsdev/spark";
+import { BALL_COLOUR_MODES, BallSystem, type BallSettings } from "./balls";
 import { MirrorFigure } from "./figure";
 import {
   CUBE_COLOUR_MODES,
@@ -37,6 +42,7 @@ import {
   MOTION,
   createCubeRoom,
   paletteFor,
+  type CubeRoom,
   type CubeRoomSettings,
 } from "./cubeRoom";
 import { PALETTE_PRESETS } from "./palettes";
@@ -45,13 +51,15 @@ import { HeadTracker } from "./headTracker";
 import { applyOffAxis, measureWindow, type WindowGeometry } from "./offAxis";
 import { ROOMS, isBoxRoom, type Placement, type Room, type RoomConfig, type SplatRoomConfig } from "./rooms";
 import { activeProfile, loadSettings, saveSettings, type DisplayProfile } from "./settings";
-import { createSplatRoom, rotatePlacement, type SplatRoom } from "./splatRoom";
+import type { SplatRoom } from "./splatRoom";
 import { addUserRoom, deleteUserRoom, isSplatFile, listUserRooms } from "./userRooms";
 
 // Line icons for the panel (placeholders are <i data-lucide="name"> in index.html).
 createIcons({
   icons: {
+    ArrowDownToLine,
     ArrowUpDown,
+    Camera,
     CameraOff,
     ChevronRight,
     Copy,
@@ -62,6 +70,8 @@ createIcons({
     Minus,
     MousePointer2,
     Move,
+    PanelLeftClose,
+    PanelLeftOpen,
     Plus,
     RotateCcw,
     Scan,
@@ -69,6 +79,7 @@ createIcons({
     Shuffle,
     Trash,
     Upload,
+    Zap,
   },
 });
 
@@ -81,13 +92,39 @@ const canvas = document.getElementById("scene") as HTMLCanvasElement;
 // No WebGL anti-aliasing: it does nothing for splats and costs a lot.
 const renderer = new THREE.WebGLRenderer({ canvas });
 const scene = new THREE.Scene();
-scene.background = new THREE.Color(0x04070b);
+const DEFAULT_BACKGROUND = new THREE.Color(0x04070b);
+scene.background = DEFAULT_BACKGROUND;
 const camera = new THREE.PerspectiveCamera();
-// Spark draws every splat room in the scene through this one object.
-scene.add(new SparkRenderer({ renderer }));
+
+/*
+ * Splat rooms need Spark, the largest library here. It is loaded the first
+ * time a splat room is opened, so the grid and cube rooms start without it.
+ */
+type SplatModule = typeof import("./splatRoom");
+let splatModule: SplatModule | null = null;
+let splatSupport: Promise<void> | null = null;
+function loadSplatSupport(): Promise<void> {
+  splatSupport ??= Promise.all([import("./splatRoom"), import("@sparkjsdev/spark")]).then(([mod, spark]) => {
+    splatModule = mod;
+    // Spark draws every splat room in the scene through this one object.
+    scene.add(new spark.SparkRenderer({ renderer }));
+  });
+  return splatSupport;
+}
+/** Turns a placement, once splat support has loaded (it always has when a splat room is showing). */
+function rotate(p: Placement, axis: "x" | "y" | "z", degrees: number): Placement {
+  return splatModule ? splatModule.rotatePlacement(p, axis, degrees) : p;
+}
 // The viewer, cut out of the webcam image and stood inside the room.
 const figure = new MirrorFigure();
 scene.add(figure.mesh);
+// Balls bouncing around the cube room. They outlive room rebuilds (a layout change keeps them).
+const balls = new BallSystem();
+scene.add(balls.mesh);
+/** The current room, if it's one balls can bounce around in. */
+function ballRoom(): CubeRoom | null {
+  return room && "collider" in room ? (room as CubeRoom) : null;
+}
 
 /** Built-in rooms plus the files the user has added in the browser. */
 const rooms: RoomConfig[] = [...ROOMS];
@@ -120,9 +157,20 @@ function rebuild(): void {
       room.dispose();
     }
     roomId = config.id;
-    if (config.type === "splat") {
+    room = null;
+    if (config.type === "splat" && !splatModule) {
+      // First splat room: fetch Spark, then build whichever room is current by then.
+      splatRoom = null;
+      void loadSplatSupport().then(
+        () => {
+          roomId = "";
+          rebuild();
+        },
+        () => flash("Couldn't load the splat renderer"),
+      );
+    } else if (config.type === "splat" && splatModule) {
       const saved = settings.placements[config.id];
-      splatRoom = createSplatRoom(config, saved ?? defaultPlacement(config), win);
+      splatRoom = splatModule.createSplatRoom(config, saved ?? defaultPlacement(config), win);
       room = splatRoom;
       // A file the user just added has no placement yet: guess one.
       if (config.user && !saved) autoFit();
@@ -134,8 +182,11 @@ function rebuild(): void {
           ? createCubeRoom(win.width, win.height, depth, settings)
           : createGridRoom(win.width, win.height, depth, settings.showObjects);
     }
-    scene.add(room.group);
-    if (import.meta.env.DEV) Object.assign(window, { room, tracker });
+    if (room) scene.add(room.group);
+    // Rooms can bring their own haze and background.
+    scene.fog = room?.fog ?? null;
+    scene.background = room?.background ?? DEFAULT_BACKGROUND;
+    if (import.meta.env.DEV) Object.assign(window, { room, tracker, balls });
   }
   syncHud();
 }
@@ -143,6 +194,21 @@ function rebuild(): void {
 function commit(): void {
   saveSettings(settings);
   rebuild();
+}
+
+/**
+ * For sliders that rebuild the room: save now, but rebuild at most once per
+ * frame, so dragging doesn't rebuild hundreds of cubes on every input event.
+ */
+let rebuildQueued = false;
+function commitSoon(): void {
+  saveSettings(settings);
+  if (rebuildQueued) return;
+  rebuildQueued = true;
+  requestAnimationFrame(() => {
+    rebuildQueued = false;
+    rebuild();
+  });
 }
 
 // ---------- Room placement ----------
@@ -184,7 +250,7 @@ canvas.addEventListener("pointermove", (e) => {
   drag = { x: e.clientX, y: e.clientY };
   let p = splatRoom.placement;
   if (e.shiftKey) {
-    p = rotatePlacement(rotatePlacement(p, "y", dx * 0.15), "x", dy * 0.15);
+    p = rotate(rotate(p, "y", dx * 0.15), "x", dy * 0.15);
   } else {
     const perPx = p.windowWidth / window.innerWidth;
     p = { ...p, position: [p.position[0] + dx * perPx, p.position[1] - dy * perPx, p.position[2]] };
@@ -231,18 +297,19 @@ window.addEventListener(
   { passive: true },
 );
 
-function updateEye(now: number, dt: number): void {
-  let timeConstant = 0.03; // light smoothing between webcam frames
-  if (adjusting) {
-    // Hold the view still while the room is being placed.
-    target.set(0, 0, REST_DISTANCE);
-    timeConstant = 0.15;
-  } else if (!settings.followHead) {
-    // Perspective switched off: a fixed view, straight on. Eased, so switching isn't a jump.
-    target.set(0, 0, REST_DISTANCE);
-    timeConstant = 0.25;
-  } else if (mouseMode) {
-    target.set(mouse.x, mouse.y, mouse.z);
+/**
+ * Where the viewer really is (their head, or the mouse in mouse mode), in
+ * window space, whatever the view is doing. Rooms react to this, so fish
+ * still come to look at you with Follow head off. Null while nobody is seen.
+ */
+const viewer = new THREE.Vector3();
+const viewerTarget = new THREE.Vector3();
+let viewerSeen = false;
+
+function updateViewer(now: number, dt: number): void {
+  let seen = true;
+  if (mouseMode) {
+    viewerTarget.set(mouse.x, mouse.y, mouse.z);
   } else if (tracker.head && now - tracker.lastSeen < REST_AFTER_MS) {
     // Camera space -> window space: undo the camera's upward tilt, then
     // shift by where the lens sits relative to the centre of the window.
@@ -251,7 +318,34 @@ function updateEye(now: number, dt: number): void {
     const h = tracker.head;
     const y = h.y * Math.cos(tilt) + h.z * Math.sin(tilt);
     const z = -h.y * Math.sin(tilt) + h.z * Math.cos(tilt);
-    target.set(h.x + win.cameraX, y + win.cameraY, z + p.cameraForwardM);
+    viewerTarget.set(h.x + win.cameraX, y + win.cameraY, z + p.cameraForwardM);
+  } else {
+    seen = false;
+  }
+  // Light smoothing between webcam frames; jump straight there when first seen.
+  if (seen && !viewerSeen) viewer.copy(viewerTarget);
+  else if (seen) viewer.lerp(viewerTarget, 1 - Math.exp(-dt / 0.03));
+  viewerSeen = seen;
+}
+
+function updateEye(now: number, dt: number): void {
+  updateViewer(now, dt);
+  let timeConstant = 0.03; // light smoothing between webcam frames
+  if (adjusting) {
+    // Hold the view still while the room is being placed.
+    target.set(0, 0, REST_DISTANCE);
+    timeConstant = 0.15;
+  } else if (mouseMode) {
+    // The mouse steers the view, whether or not head following is on.
+    target.copy(viewerTarget);
+    timeConstant = 0.06;
+  } else if (!settings.followHead) {
+    // Head following switched off: a fixed view, straight on. Eased, so switching isn't a jump.
+    target.set(0, 0, REST_DISTANCE);
+    timeConstant = 0.25;
+  } else if (viewerSeen) {
+    // The view follows the viewer.
+    target.copy(viewerTarget);
   } else {
     target.set(0, 0, REST_DISTANCE);
     timeConstant = 0.6;
@@ -313,6 +407,13 @@ const el = {
   calibrate: button("btn-calibrate"),
   mouse: button("btn-mouse"),
   follow: button("btn-follow"),
+  cameraBtn: button("btn-camera"),
+  cameraLabel: document.querySelector("#btn-camera span") as HTMLElement,
+  shortcuts: input("in-shortcuts"),
+  shortcutsOff: $("shortcuts-off"),
+  shortcutsOn: button("btn-shortcuts-on"),
+  hideHud: button("btn-hide-hud"),
+  showHud: button("btn-show-hud"),
   fullscreen: button("btn-fullscreen"),
 };
 el.preview.prepend(tracker.video);
@@ -355,6 +456,7 @@ function syncHud(): void {
   buildPaletteEditor();
   el.cubeSpeed.value = String(settings.cubeSpeed);
   syncCubeControls();
+  syncBallControls();
   el.placement.hidden = config.type !== "splat";
   if (config.type !== "splat") setAdjusting(false);
   el.depth.value = String(settings.roomDepth);
@@ -374,6 +476,7 @@ function syncHud(): void {
   for (const [field, read] of profileFields) field.value = fmt(read(p), 1);
 
   el.hud.classList.toggle("hidden", !settings.showHud);
+  el.showHud.hidden = settings.showHud;
   syncSliderReadouts();
   el.winsize.textContent = `${(win.width * 100).toFixed(1)} × ${(win.height * 100).toFixed(1)} cm`;
 }
@@ -414,7 +517,15 @@ function syncSliderReadouts(): void {
     const out = document.querySelector<HTMLOutputElement>(`output[data-for="${id}"]`);
     if (out) out.textContent = read();
   }
-  document.querySelectorAll<HTMLInputElement>('input[type="range"]').forEach(fillSlider);
+  document.querySelectorAll<HTMLInputElement>('input[type="range"]').forEach((slider) => {
+    fillSlider(slider);
+    describeSlider(slider);
+  });
+}
+/** Screen readers announce the same text as the readout ("35%"), not the raw slider position. */
+function describeSlider(slider: HTMLInputElement): void {
+  const text = slider.parentElement?.querySelector("output")?.textContent;
+  if (text) slider.setAttribute("aria-valuetext", text);
 }
 // Any slider moved by hand: refill its track and update its readout after its own handler has run.
 document.addEventListener("input", (e) => {
@@ -425,14 +536,27 @@ document.addEventListener("input", (e) => {
     const read = sliderReadouts[t.id];
     const out = document.querySelector<HTMLOutputElement>(`output[data-for="${t.id}"]`);
     if (read && out) out.textContent = read();
+    describeSlider(t);
   });
 });
+
+/** Says something to screen readers through the status region (cleared first, so a repeat is read again). */
+const announcer = document.getElementById("announcer") as HTMLElement;
+let lastAnnouncement = "";
+function announce(text: string): void {
+  // VoiceOver skips a message identical to the previous one; a no-break space makes it differ.
+  const message = text === lastAnnouncement ? `${text}\u00a0` : text;
+  lastAnnouncement = message;
+  announcer.textContent = "";
+  requestAnimationFrame(() => (announcer.textContent = message));
+}
 
 let notice = "";
 let noticeUntil = 0;
 function flash(text: string): void {
   notice = text;
   noticeUntil = performance.now() + 2500;
+  announce(text);
 }
 
 // Rooms
@@ -486,7 +610,7 @@ el.removeRoom.addEventListener("click", () => {
 // Grid room options
 el.depth.addEventListener("input", () => {
   settings.roomDepth = parseFloat(el.depth.value);
-  commit();
+  commitSoon();
 });
 el.objects.addEventListener("change", () => {
   settings.showObjects = el.objects.checked;
@@ -662,7 +786,7 @@ for (const slider of el.cubeSliders) {
   slider.addEventListener("input", () => {
     settings[key] = sliderToValue(slider);
     showCubeValue(key);
-    if (isLayoutKey(key)) commit();
+    if (isLayoutKey(key)) commitSoon();
     else saveSettings(settings);
   });
 }
@@ -672,6 +796,77 @@ el.cubeLayout.addEventListener("change", () => {
   el.cubeLayout.blur();
   commit();
 });
+// ---------- Balls ----------
+type NumericBallKey = { [K in keyof BallSettings]: BallSettings[K] extends number ? K : never }[keyof BallSettings];
+type SwitchBallKey = { [K in keyof BallSettings]: BallSettings[K] extends boolean ? K : never }[keyof BallSettings];
+/** How each ball slider's value reads next to it. */
+const formatBallValue: Record<NumericBallKey, (v: number) => string> = {
+  ballCount: (v) => String(Math.round(v)),
+  ballSize: times,
+  ballSizeVariety: percent,
+  ballBounce: percent,
+  ballGravity: (v) => (v === 0 ? "Off" : times(v)),
+  ballDrag: percent,
+  ballFriction: percent,
+  ballShine: percent,
+  ballGlow: times,
+};
+const ballSliders = [...document.querySelectorAll<HTMLInputElement>('input[type="range"][data-ball]')];
+const ballSwitches = [...document.querySelectorAll<HTMLInputElement>('input[type="checkbox"][data-ball]')];
+const ballColourMode = $<HTMLSelectElement>("in-ball-colour-mode");
+const ballColourRow = $("ball-colour-row");
+const ballColour = input("in-ball-colour");
+for (const m of BALL_COLOUR_MODES) ballColourMode.add(new Option(m.name, m.id));
+
+function showBallValue(slider: HTMLInputElement): void {
+  const key = slider.dataset.ball as NumericBallKey;
+  const out = slider.parentElement?.querySelector("output");
+  if (out) out.textContent = formatBallValue[key](settings[key]);
+}
+function syncBallControls(): void {
+  for (const slider of ballSliders) {
+    slider.value = String(settings[slider.dataset.ball as NumericBallKey]);
+    showBallValue(slider);
+  }
+  for (const toggle of ballSwitches) toggle.checked = settings[toggle.dataset.ball as SwitchBallKey];
+  ballColourMode.value = settings.ballColourMode;
+  ballColourRow.hidden = settings.ballColourMode !== "single";
+  ballColour.value = settings.ballColour;
+}
+// Ball settings are read live every frame, so nothing needs rebuilding.
+for (const slider of ballSliders) {
+  slider.addEventListener("input", () => {
+    settings[slider.dataset.ball as NumericBallKey] = parseFloat(slider.value);
+    showBallValue(slider);
+    saveSettings(settings);
+  });
+}
+for (const toggle of ballSwitches) {
+  toggle.addEventListener("change", () => {
+    settings[toggle.dataset.ball as SwitchBallKey] = toggle.checked;
+    saveSettings(settings);
+  });
+}
+ballColourMode.addEventListener("change", () => {
+  const mode = BALL_COLOUR_MODES.find((m) => m.id === ballColourMode.value);
+  if (mode) settings.ballColourMode = mode.id;
+  ballColourRow.hidden = settings.ballColourMode !== "single";
+  ballColourMode.blur();
+  saveSettings(settings);
+});
+ballColour.addEventListener("input", () => {
+  settings.ballColour = ballColour.value;
+  saveSettings(settings);
+});
+button("btn-balls-drop").addEventListener("click", () => {
+  const home = ballRoom();
+  if (home) balls.drop(settings, home.bounds);
+});
+button("btn-balls-shake").addEventListener("click", () => {
+  const home = ballRoom();
+  if (home) balls.shake(home.bounds);
+});
+
 el.cubeTurn.addEventListener("change", () => {
   const turn = CUBE_TURNS.find((t) => t.id === el.cubeTurn.value);
   if (turn) settings.cubeTurn = turn.id;
@@ -715,12 +910,12 @@ for (const field of [el.pw, el.px, el.py, el.pz]) {
 document.querySelectorAll<HTMLButtonElement>("button[data-rot]").forEach((b) => {
   b.addEventListener("click", () => {
     if (!splatRoom) return;
-    setPlacement(rotatePlacement(splatRoom.placement, b.dataset.rot as "x" | "y" | "z", Number(b.dataset.deg)));
+    setPlacement(rotate(splatRoom.placement, b.dataset.rot as "x" | "y" | "z", Number(b.dataset.deg)));
   });
 });
 button("btn-flip").addEventListener("click", () => {
   // Half a turn about the viewing direction: same view, other way up.
-  if (splatRoom) setPlacement(rotatePlacement(splatRoom.placement, "z", 180));
+  if (splatRoom) setPlacement(rotate(splatRoom.placement, "z", 180));
 });
 button("btn-autofit").addEventListener("click", autoFit);
 button("btn-reset-placement").addEventListener("click", () => {
@@ -791,10 +986,54 @@ function setMouseMode(on: boolean): void {
   mouseMode = on;
   el.mouse.setAttribute("aria-pressed", String(on));
 }
+/**
+ * Whether this browser can animate display: none (the panel's exit). Firefox
+ * accepts allow-discrete without honouring it for display, so this probes
+ * what actually happens instead of asking CSS.supports.
+ */
+let displayTransitions: boolean | undefined;
+function canTransitionDisplay(): boolean {
+  if (displayTransitions !== undefined) return displayTransitions;
+  if (!CSS.supports("transition-behavior", "allow-discrete")) return (displayTransitions = false);
+  const probe = document.createElement("div");
+  probe.style.cssText = "transition: display 1s allow-discrete !important; display: block;";
+  document.body.append(probe);
+  getComputedStyle(probe).display;
+  probe.style.display = "none";
+  displayTransitions = getComputedStyle(probe).display === "block";
+  probe.remove();
+  return displayTransitions;
+}
+
+/** Hides the panel after its exit motion; where display can't transition, plays the exit first by hand. */
+async function hideHud(): Promise<void> {
+  if (canTransitionDisplay()) {
+    el.hud.classList.add("hidden");
+    return;
+  }
+  el.hud.setAttribute("data-closing", "");
+  const running = el.hud.getAnimations();
+  if (running.length) {
+    await Promise.race([Promise.allSettled(running.map((a) => a.finished)), new Promise((r) => setTimeout(r, 1000))]);
+  }
+  // Skipped if the panel was shown again mid-exit.
+  if (el.hud.hasAttribute("data-closing")) {
+    el.hud.removeAttribute("data-closing");
+    el.hud.classList.add("hidden");
+  }
+}
+
 function toggleHud(): void {
   settings.showHud = !settings.showHud;
-  el.hud.classList.toggle("hidden", !settings.showHud);
+  if (settings.showHud) {
+    el.hud.removeAttribute("data-closing");
+    el.hud.classList.remove("hidden");
+  } else {
+    void hideHud();
+  }
+  el.showHud.hidden = settings.showHud;
   saveSettings(settings);
+  if (!settings.showHud) el.showHud.focus();
 }
 function toggleFullscreen(): void {
   if (document.fullscreenElement) void document.exitFullscreen();
@@ -809,17 +1048,65 @@ function setFollowHead(on: boolean): void {
 setFollowHead(settings.followHead);
 el.follow.addEventListener("click", () => setFollowHead(!settings.followHead));
 el.fullscreen.addEventListener("click", toggleFullscreen);
+/** Controls where letter keys do something themselves: text and number fields, menus. */
+const LETTER_CONTROLS = [
+  'input:not([type="range"], [type="checkbox"], [type="radio"], [type="color"], [type="button"], [type="file"])',
+  "select",
+  "textarea",
+  "[contenteditable]",
+].join(", ");
+
 window.addEventListener("keydown", (e) => {
-  const t = e.target;
-  const typing = t instanceof HTMLInputElement && (t.type === "number" || t.type === "text");
-  if (typing || e.metaKey || e.ctrlKey) return;
   const k = e.key.toLowerCase();
+  if (k === "escape") return setAdjusting(false);
+  // Single-letter shortcuts stay out of the way where letters mean
+  // something: typing in a field, or jumping through a menu's options. They
+  // still work after using a slider, switch or button, which ignore letters.
+  // They can also be turned off entirely (WCAG 2.1.4 Character Key Shortcuts).
+  if (!settings.shortcuts || e.metaKey || e.ctrlKey || e.altKey) return;
+  const t = e.target;
+  if (t instanceof HTMLElement && t.closest(LETTER_CONTROLS)) return;
   if (k === "h") toggleHud();
   else if (k === "f") toggleFullscreen();
   else if (k === "m") setMouseMode(!mouseMode);
   else if (k === "p") setFollowHead(!settings.followHead);
-  else if (k === "escape") setAdjusting(false);
 });
+
+/** Shows the shortcuts as on or off: the switch, the keycaps, and the footer note. */
+function showShortcuts(on: boolean): void {
+  el.shortcuts.checked = on;
+  document.body.classList.toggle("no-shortcuts", !on);
+  el.shortcutsOff.hidden = on;
+}
+/** A choice the person made: remembered. */
+function setShortcuts(on: boolean): void {
+  settings.shortcuts = on;
+  settings.shortcutsChosen = true;
+  showShortcuts(on);
+  saveSettings(settings);
+}
+// At startup only show the saved state; saving here could turn a stray value into a lasting one.
+showShortcuts(settings.shortcuts);
+el.shortcuts.addEventListener("change", () => setShortcuts(el.shortcuts.checked));
+el.shortcutsOn.addEventListener("click", () => setShortcuts(true));
+
+el.hideHud.addEventListener("click", toggleHud);
+el.showHud.addEventListener("click", () => {
+  toggleHud();
+  el.hideHud.focus();
+});
+
+// The camera starts straight away only if access was already granted. Otherwise
+// it waits for "Start camera", so the browser's permission prompt follows from a click.
+el.cameraBtn.addEventListener("click", () => void tracker.start());
+void (async () => {
+  try {
+    const permission = await navigator.permissions.query({ name: "camera" as PermissionName });
+    if (permission.state === "granted") void tracker.start();
+  } catch {
+    // Permission can't be queried in this browser: wait for the button.
+  }
+})();
 
 /** Tints the pixels the cutout counts as "person" over the camera preview. */
 const maskCanvas = document.createElement("canvas");
@@ -878,6 +1165,7 @@ function drawPreview(): void {
   }
 }
 
+let wasLoading = false;
 let fpsFrames = 0;
 let fpsSince = performance.now();
 
@@ -890,7 +1178,20 @@ function updateHud(now: number): void {
   }
   // The pill at the bottom: a short notice, else loading progress.
   const loading = room?.loading;
-  const pill = now < noticeUntil ? notice : loading !== undefined ? `Loading room… ${Math.round(loading * 100)}%` : "";
+  const fetchingRenderer = currentConfig().type === "splat" && !splatModule;
+  const isLoading = loading !== undefined || fetchingRenderer;
+  if (isLoading !== wasLoading) {
+    announce(isLoading ? "Loading room" : "Room loaded");
+    wasLoading = isLoading;
+  }
+  const pill =
+    now < noticeUntil
+      ? notice
+      : fetchingRenderer
+        ? "Loading splat renderer"
+        : loading !== undefined
+          ? `Loading room ${Math.round(loading * 100)}%`
+          : "";
   el.loading.hidden = pill === "";
   if (pill) el.loading.textContent = pill;
   if (!settings.showHud) return;
@@ -900,12 +1201,14 @@ function updateHud(now: number): void {
   if (adjusting) {
     cls = "mouse";
     text = "Placing room";
-  } else if (!settings.followHead) {
-    cls = "mouse";
-    text = "Fixed view";
   } else if (mouseMode) {
     cls = "mouse";
     text = "Mouse mode";
+  } else if (!settings.followHead) {
+    cls = "mouse";
+    text = "Fixed view";
+  } else if (tracker.status === "idle") {
+    text = "Camera off";
   } else if (tracker.status === "loading") {
     text = "Starting camera";
   } else if (tracker.status === "no-camera") {
@@ -921,8 +1224,13 @@ function updateHud(now: number): void {
   el.dot.className = cls;
   el.status.textContent = text;
   el.status.title = tracker.error;
-  el.eye.textContent = `${(eye.x * 100).toFixed(0)} · ${(eye.y * 100).toFixed(0)} · ${(eye.z * 100).toFixed(0)} cm`;
+  // "+ 0" turns -0 into 0, so the readout never shows "-0".
+  const cm = (v: number) => (Math.round(v * 100) + 0).toFixed(0);
+  el.eye.textContent = `${cm(eye.x)} · ${cm(eye.y)} · ${cm(eye.z)} cm`;
   el.preview.toggleAttribute("data-live", tracker.status === "tracking" || tracker.status === "searching");
+  const canStart = tracker.status === "idle" || tracker.status === "no-camera";
+  el.cameraBtn.hidden = !canStart;
+  if (canStart) el.cameraLabel.textContent = tracker.status === "idle" ? "Start camera" : "Try again";
   const grid = isBoxRoom(currentConfig());
   el.cutoutLabel.hidden = el.cutout.hidden = !grid;
   if (grid) {
@@ -949,7 +1257,15 @@ function frame(now: number): void {
     roomDepth: win.width * settings.roomDepth,
   });
   applyOffAxis(camera, eye, win, room?.clipAtWindow);
-  room?.update(now / 1000, eye);
+  room?.update(now / 1000, eye, viewerSeen ? viewer : undefined);
+  const ballHome = ballRoom();
+  balls.mesh.visible = ballHome !== null;
+  if (ballHome) {
+    balls.update(dt, settings, ballHome, {
+      mode: settings.cubeColourMode,
+      palette: paletteFor(settings, settings.cubeColourMode),
+    });
+  }
   renderer.render(scene, camera);
   updateHud(now);
 
@@ -962,7 +1278,6 @@ setInterval(() => (win = measureWindow(profile())), 1000);
 
 rebuild();
 requestAnimationFrame(frame);
-void tracker.start();
 // Rooms the user added earlier live in the browser's storage.
 void listUserRooms().then((list) => {
   if (!list.length) return;
