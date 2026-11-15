@@ -1,0 +1,728 @@
+/*
+ * Window Room panel.
+ * Direction: calm, optical, exact. Graphite chrome so the 3D scene is the one
+ * colourful thing on screen; a single amber accent, like a camera's tally
+ * light, for what is live or selected; viewfinder corner brackets as the
+ * signature, used on the camera preview and the mark only.
+ */
+
+:root {
+  color-scheme: dark;
+
+  /* Graphite ramp */
+  --deep: #0f0f10;
+  --panel: #141415;
+  --card: #19191b;
+  --raised: #232325;
+  --raised-hover: #2a2a2d;
+  --hair: rgba(237, 237, 237, 0.08);
+  --hair-strong: rgba(237, 237, 237, 0.14);
+  --text: #ededed;
+  --text-2: #a1a1a6;
+  --muted: #85858b;
+
+  /* The one accent: a tally-light amber, with dark ink on it */
+  --accent: #f2a83b;
+  --on-accent: #1c1405;
+  --negative: #e5484d;
+
+  --ease: cubic-bezier(0.22, 1, 0.36, 1);
+  --fast: 140ms;
+
+  --font: "Geist Sans", ui-sans-serif, system-ui, sans-serif;
+  --mono: "Geist Mono", ui-monospace, "SF Mono", monospace;
+
+  --control-w: 136px;
+
+  font-family: var(--font);
+  font-size: 13px;
+  line-height: 20px;
+  font-weight: 400;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  height: 100%;
+  overflow: hidden;
+  background: var(--deep);
+  color: var(--text);
+}
+
+[hidden] {
+  display: none !important;
+}
+
+#scene {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+body.adjusting #scene {
+  cursor: move;
+}
+
+/* ---------- Icons ---------- */
+
+svg.lucide {
+  width: 16px;
+  height: 16px;
+  stroke-width: 1.5;
+  flex: none;
+  color: var(--muted);
+}
+
+/* ---------- Panel ---------- */
+
+#hud {
+  position: fixed;
+  top: 16px;
+  left: 16px;
+  width: 280px;
+  max-height: calc(100vh - 32px);
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: var(--raised) transparent;
+  background: rgba(20, 20, 21, 0.96);
+  border: 1px solid var(--hair);
+  border-radius: 16px;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.32);
+  animation: panel-in 320ms var(--ease) both;
+}
+#hud.hidden {
+  display: none;
+}
+@keyframes panel-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+}
+
+/* Top-level blocks are separated by a hairline and even space. */
+#hud > * + * {
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid var(--hair);
+}
+#hud > [hidden] + *,
+#hud > .hud-head + * {
+  border-top: none;
+  padding-top: 0;
+}
+
+/* ---------- Header ---------- */
+
+.hud-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 20px;
+}
+/* The mark: four viewfinder corners. */
+.mark {
+  width: 14px;
+  height: 14px;
+  flex: none;
+  --c: var(--text);
+  background:
+    linear-gradient(var(--c), var(--c)) top left / 5px 1.5px no-repeat,
+    linear-gradient(var(--c), var(--c)) top left / 1.5px 5px no-repeat,
+    linear-gradient(var(--c), var(--c)) top right / 5px 1.5px no-repeat,
+    linear-gradient(var(--c), var(--c)) top right / 1.5px 5px no-repeat,
+    linear-gradient(var(--c), var(--c)) bottom left / 5px 1.5px no-repeat,
+    linear-gradient(var(--c), var(--c)) bottom left / 1.5px 5px no-repeat,
+    linear-gradient(var(--c), var(--c)) bottom right / 5px 1.5px no-repeat,
+    linear-gradient(var(--c), var(--c)) bottom right / 1.5px 5px no-repeat;
+}
+.wordmark {
+  font-size: 14px;
+  font-weight: 500;
+}
+.meta {
+  margin-left: auto;
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---------- Viewfinder ---------- */
+
+.viewfinder {
+  position: relative;
+  aspect-ratio: 16 / 9;
+  background: var(--deep);
+  border: 1px solid var(--hair);
+  border-radius: 8px;
+  overflow: hidden;
+}
+.viewfinder video,
+.viewfinder canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  /* Mirrored, so moving right moves you right in the preview. */
+  transform: scaleX(-1);
+}
+.vf-corner {
+  position: absolute;
+  z-index: 2;
+  width: 12px;
+  height: 12px;
+  border-color: rgba(237, 237, 237, 0.72);
+  border-style: solid;
+  border-width: 0;
+  pointer-events: none;
+}
+.vf-corner.tl {
+  top: 8px;
+  left: 8px;
+  border-top-width: 1.5px;
+  border-left-width: 1.5px;
+}
+.vf-corner.tr {
+  top: 8px;
+  right: 8px;
+  border-top-width: 1.5px;
+  border-right-width: 1.5px;
+}
+.vf-corner.bl {
+  bottom: 8px;
+  left: 8px;
+  border-bottom-width: 1.5px;
+  border-left-width: 1.5px;
+}
+.vf-corner.br {
+  bottom: 8px;
+  right: 8px;
+  border-bottom-width: 1.5px;
+  border-right-width: 1.5px;
+}
+.vf-empty {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  display: grid;
+  place-items: center;
+}
+.vf-empty svg.lucide {
+  width: 20px;
+  height: 20px;
+}
+.viewfinder[data-live] .vf-empty {
+  display: none;
+}
+
+.status-line {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 12px;
+  font-weight: 500;
+}
+/* The tally light: amber while a viewer is tracked, quiet otherwise. */
+#status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 4px;
+  flex: none;
+  background: var(--muted);
+  transition: background-color var(--fast) var(--ease), box-shadow var(--fast) var(--ease);
+}
+#status-dot.tracking {
+  background: var(--accent);
+}
+#status-dot.searching {
+  background: transparent;
+  box-shadow: inset 0 0 0 1.5px var(--text-2);
+}
+#status-dot.mouse {
+  background: var(--text-2);
+}
+#status-dot.error {
+  background: var(--negative);
+}
+
+.readouts {
+  margin: 8px 0 0;
+  display: grid;
+  grid-template-columns: 56px 1fr;
+  gap: 4px 8px;
+  font-family: var(--mono);
+  font-size: 12px;
+  line-height: 16px;
+  font-variant-numeric: tabular-nums;
+}
+.readouts dt {
+  color: var(--muted);
+}
+.readouts dd {
+  margin: 0;
+  color: var(--text-2);
+  overflow-wrap: anywhere;
+}
+
+/* ---------- Groups and rows ---------- */
+
+.group,
+.section,
+#palette {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.group-label {
+  margin: 0;
+  font-size: 12px;
+  line-height: 16px;
+  font-weight: 500;
+  color: var(--muted);
+}
+.group-label:not(:first-child) {
+  margin-top: 16px;
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 32px;
+  color: var(--text-2);
+}
+.row > span:first-child {
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.hint {
+  margin: 0;
+  font-size: 12px;
+  line-height: 16px;
+  color: var(--muted);
+}
+
+/* ---------- Controls ---------- */
+
+select,
+input[type="text"],
+input[type="number"] {
+  height: 32px;
+  width: var(--control-w);
+  padding: 0 10px;
+  background: var(--raised);
+  color: var(--text);
+  border: 1px solid var(--hair);
+  border-radius: 8px;
+  font: inherit;
+  outline: none;
+  transition: border-color var(--fast) var(--ease), background-color var(--fast) var(--ease);
+}
+select {
+  appearance: none;
+  padding-right: 28px;
+  text-overflow: ellipsis;
+  cursor: pointer;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%2385858b' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 8px center;
+}
+select:hover,
+input[type="text"]:hover,
+input[type="number"]:hover {
+  border-color: var(--hair-strong);
+}
+select.wide,
+.wide {
+  width: 100%;
+}
+input[type="number"] {
+  width: 80px;
+  font-family: var(--mono);
+  font-size: 12px;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+.unit {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+.unit i {
+  width: 16px;
+  font-style: normal;
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--muted);
+}
+.row > input[type="number"] {
+  width: 104px;
+}
+
+/* Sliders: a thin neutral track filled up to the value, and a light knob. */
+.slider {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  width: var(--control-w);
+}
+.slider output {
+  width: 40px;
+  flex: none;
+  text-align: right;
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+input[type="range"] {
+  appearance: none;
+  flex: 1;
+  min-width: 0;
+  height: 20px;
+  margin: 0;
+  background: transparent;
+  cursor: pointer;
+  --p: 50%;
+}
+input[type="range"]::-webkit-slider-runnable-track {
+  height: 4px;
+  border-radius: 2px;
+  background: linear-gradient(to right, var(--text-2) var(--p), var(--raised) var(--p));
+}
+input[type="range"]::-webkit-slider-thumb {
+  appearance: none;
+  width: 12px;
+  height: 12px;
+  margin-top: -4px;
+  border-radius: 6px;
+  background: var(--text);
+  box-shadow: 0 0 0 3px var(--panel);
+  transition: transform var(--fast) var(--ease);
+}
+input[type="range"]:active::-webkit-slider-thumb {
+  transform: scale(0.92);
+}
+input[type="range"]::-moz-range-track {
+  height: 4px;
+  border-radius: 2px;
+  background: var(--raised);
+}
+input[type="range"]::-moz-range-progress {
+  height: 4px;
+  border-radius: 2px;
+  background: var(--text-2);
+}
+input[type="range"]::-moz-range-thumb {
+  width: 12px;
+  height: 12px;
+  border: none;
+  border-radius: 6px;
+  background: var(--text);
+  box-shadow: 0 0 0 3px var(--panel);
+}
+
+/* Switches */
+input.switch {
+  appearance: none;
+  position: relative;
+  width: 32px;
+  height: 20px;
+  margin: 0;
+  flex: none;
+  border-radius: 10px;
+  background: var(--raised);
+  border: 1px solid var(--hair);
+  cursor: pointer;
+  transition: background-color var(--fast) var(--ease), border-color var(--fast) var(--ease);
+}
+input.switch::before {
+  content: "";
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 14px;
+  height: 14px;
+  border-radius: 7px;
+  background: var(--muted);
+  transition: transform var(--fast) var(--ease), background-color var(--fast) var(--ease);
+}
+input.switch:checked {
+  background: var(--accent);
+  border-color: transparent;
+}
+input.switch:checked::before {
+  transform: translateX(12px);
+  background: var(--on-accent);
+}
+
+/* Buttons */
+.buttons {
+  display: flex;
+  gap: 8px;
+}
+.buttons > * {
+  flex: 1 1 0;
+  min-width: 0;
+}
+.buttons.grid-2 {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+}
+button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  height: 32px;
+  padding: 0 12px;
+  background: var(--raised);
+  color: var(--text);
+  border: 1px solid var(--hair);
+  border-radius: 8px;
+  font: inherit;
+  font-weight: 500;
+  white-space: nowrap;
+  cursor: pointer;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+  transition:
+    background-color var(--fast) var(--ease),
+    border-color var(--fast) var(--ease),
+    color var(--fast) var(--ease),
+    transform var(--fast) var(--ease);
+}
+button:hover {
+  background: var(--raised-hover);
+}
+button:active {
+  transform: scale(0.98);
+}
+button:disabled {
+  opacity: 0.4;
+  cursor: default;
+  transform: none;
+}
+button.icon-only {
+  flex: none;
+  width: 32px;
+  padding: 0;
+}
+/* "Adjust with mouse" while active */
+button.active {
+  border-color: rgba(242, 168, 59, 0.5);
+}
+button.active svg.lucide {
+  color: var(--accent);
+}
+
+:is(button, select, input, summary):focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+kbd {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 4px;
+  border: 1px solid var(--hair-strong);
+  border-bottom-width: 2px;
+  border-radius: 4px;
+  background: var(--deep);
+  color: var(--text-2);
+  font-family: var(--mono);
+  font-size: 11px;
+  line-height: 1;
+}
+
+/* ---------- Folding sections ---------- */
+
+details.fold > summary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 32px;
+  font-weight: 500;
+  list-style: none;
+  cursor: pointer;
+  border-radius: 8px;
+}
+details.fold > summary::-webkit-details-marker {
+  display: none;
+}
+details.fold > summary svg.lucide {
+  transition: transform var(--fast) var(--ease);
+}
+details.fold[open] > summary svg.lucide {
+  transform: rotate(90deg);
+}
+details.fold > .section {
+  padding-top: 8px;
+}
+/* Folds inside a group sit on their own hairline. */
+.group details.fold {
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid var(--hair);
+}
+
+.steppers {
+  display: grid;
+  grid-template-columns: 1fr 32px 32px;
+  gap: 8px;
+  align-items: center;
+  color: var(--text-2);
+}
+.steppers button {
+  padding: 0;
+}
+
+/* ---------- Palette ---------- */
+
+#palette-swatches {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.swatch {
+  position: relative;
+}
+.swatch input[type="color"],
+.swatch-add {
+  display: block;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 1px solid var(--hair-strong);
+  border-radius: 6px;
+  background: var(--raised);
+  cursor: pointer;
+}
+.swatch input[type="color"]::-webkit-color-swatch-wrapper {
+  padding: 0;
+}
+.swatch input[type="color"]::-webkit-color-swatch {
+  border: none;
+  border-radius: 5px;
+}
+.swatch input[type="color"]::-moz-color-swatch {
+  border: none;
+  border-radius: 5px;
+}
+.swatch-remove {
+  position: absolute;
+  top: -6px;
+  right: -6px;
+  width: 16px;
+  height: 16px;
+  padding: 0;
+  border-radius: 8px;
+  opacity: 0;
+}
+.swatch-remove svg.lucide {
+  width: 10px;
+  height: 10px;
+  color: var(--text);
+}
+.swatch:hover .swatch-remove,
+.swatch-remove:focus-visible {
+  opacity: 1;
+}
+#in-palette-preset {
+  flex: 1 1 auto;
+  width: auto;
+}
+
+/* ---------- Footer: view toggles ---------- */
+
+.toggles {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.toggles button {
+  justify-content: flex-start;
+  width: 100%;
+  background: transparent;
+  border-color: transparent;
+  box-shadow: none;
+  color: var(--text-2);
+  font-weight: 400;
+}
+.toggles button:hover {
+  background: var(--card);
+}
+.toggles button kbd {
+  margin-left: auto;
+}
+.toggles button[aria-pressed="true"] {
+  background: var(--raised);
+  border-color: var(--hair);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06);
+  color: var(--text);
+  font-weight: 500;
+}
+.toggles button[aria-pressed="true"] svg.lucide {
+  color: var(--accent);
+}
+.hud-foot .hint {
+  margin-top: 12px;
+}
+
+/* ---------- Overlays ---------- */
+
+#loading {
+  position: fixed;
+  left: 50%;
+  bottom: 24px;
+  transform: translateX(-50%);
+  height: 32px;
+  padding: 0 12px;
+  display: flex;
+  align-items: center;
+  background: var(--panel);
+  border: 1px solid var(--hair);
+  border-radius: 8px;
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--text-2);
+  font-variant-numeric: tabular-nums;
+}
+
+#drop-hint {
+  position: fixed;
+  inset: 16px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  border: 1px dashed rgba(237, 237, 237, 0.24);
+  border-radius: 16px;
+  background: rgba(15, 15, 16, 0.72);
+  font-size: 14px;
+  color: var(--text-2);
+  pointer-events: none;
+}
+#drop-hint svg.lucide {
+  width: 24px;
+  height: 24px;
+}

@@ -1,0 +1,251 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Window Room</title>
+    <link rel="stylesheet" href="/src/style.css" />
+  </head>
+  <body>
+    <canvas id="scene"></canvas>
+    <div id="loading" hidden></div>
+    <div id="drop-hint" hidden>
+      <i data-lucide="upload"></i>
+      <span>Drop a splat file to add it as a room</span>
+    </div>
+
+    <aside id="hud">
+      <header class="hud-head">
+        <span class="mark" aria-hidden="true"></span>
+        <span class="wordmark">Window Room</span>
+        <span id="fps" class="meta"></span>
+      </header>
+
+      <!-- Viewfinder: the webcam with the tracked viewer marked on it -->
+      <section class="viewfinder-block">
+        <div id="preview" class="viewfinder">
+          <canvas id="preview-overlay"></canvas>
+          <span class="vf-corner tl"></span><span class="vf-corner tr"></span>
+          <span class="vf-corner bl"></span><span class="vf-corner br"></span>
+          <span class="vf-empty"><i data-lucide="camera-off"></i></span>
+        </div>
+        <div class="status-line">
+          <span id="status-dot"></span>
+          <span id="status">Starting camera</span>
+        </div>
+        <dl class="readouts">
+          <dt>Eye</dt>
+          <dd id="eye">–</dd>
+          <dt>Window</dt>
+          <dd id="winsize">–</dd>
+          <dt id="cutout-label">Cutout</dt>
+          <dd id="cutout">–</dd>
+        </dl>
+      </section>
+
+      <!-- Room -->
+      <section class="group">
+        <h2 class="group-label">Room</h2>
+        <select id="in-room" class="wide" aria-label="Room"></select>
+        <div class="buttons">
+          <button id="btn-add-file" title="Or drag a .ply, .spz, .splat, .ksplat or .sog file onto the page">
+            <i data-lucide="file-plus"></i>Add file
+          </button>
+          <button id="btn-remove-room"><i data-lucide="trash"></i>Remove</button>
+          <input id="in-file" type="file" accept=".ply,.spz,.splat,.ksplat,.sog" hidden />
+        </div>
+      </section>
+
+      <!-- Grid and cube rooms: depth, and the viewer standing inside -->
+      <section id="grid-options" class="group">
+        <label class="row">
+          <span>Room depth</span>
+          <span class="slider"><input id="in-depth" type="range" min="0.5" max="15" step="0.1" /><output data-for="in-depth"></output></span>
+        </label>
+        <label class="row" id="objects-row">
+          <span>Depth targets</span>
+          <input id="in-objects" type="checkbox" class="switch" />
+        </label>
+
+        <h2 class="group-label">You in the room</h2>
+        <label class="row">
+          <span>Show me</span>
+          <input id="in-figure" type="checkbox" class="switch" />
+        </label>
+        <label class="row" title="How big you are compared with the room. At 1×, a grown-up is about two thirds of the room's height.">
+          <span>Size</span>
+          <span class="slider"><input id="in-figure-size" type="range" min="0.3" max="3" step="0.05" /><output data-for="in-figure-size"></output></span>
+        </label>
+        <label class="row" title="0 keeps you the same size at any distance. Higher makes you smaller the further away you are.">
+          <span>Shrink when far</span>
+          <span class="slider"><input id="in-figure-distance" type="range" min="0" max="1.5" step="0.05" /><output data-for="in-figure-distance"></output></span>
+        </label>
+      </section>
+
+      <!-- Cube room -->
+      <section id="cube-options" class="group">
+        <h2 class="group-label">Colours</h2>
+        <label class="row">
+          <span>Effect</span>
+          <select id="in-cube-mode"></select>
+        </label>
+        <div id="palette">
+          <div id="palette-swatches"></div>
+          <p class="hint" id="palette-hint"></p>
+          <div class="buttons">
+            <select id="in-palette-preset" title="Replace these colours with a published palette">
+              <option value="">Load palette</option>
+            </select>
+            <button id="btn-palette-reset" class="icon-only" title="Back to this effect's own colours" aria-label="Reset colours">
+              <i data-lucide="rotate-ccw"></i>
+            </button>
+          </div>
+        </div>
+        <label class="row">
+          <span>Colour speed</span>
+          <span class="slider"><input id="in-cube-speed" type="range" min="0" max="3" step="0.05" /><output data-for="in-cube-speed"></output></span>
+        </label>
+
+        <details id="sec-cube-layout" class="fold">
+          <summary><i data-lucide="chevron-right"></i>Layout</summary>
+          <div class="section">
+            <label class="row"><span>Pattern</span><select id="in-cube-layout"></select></label>
+            <label class="row" title="How big the biggest cubes are">
+              <span>Cube size</span>
+              <span class="slider"><input id="in-cube-size" data-cube="cubeSize" type="range" min="1" max="10" step="1" /><output data-value-for="cubeSize"></output></span>
+            </label>
+            <label class="row mosaic-only" title="How many times a cube can break into four smaller ones">
+              <span>Size levels</span>
+              <span class="slider"><input id="in-cube-variety" data-cube="cubeVariety" type="range" min="0" max="3" step="1" /><output data-value-for="cubeVariety"></output></span>
+            </label>
+            <label class="row mosaic-only" title="How readily big cubes break into smaller ones">
+              <span>Small cubes</span>
+              <span class="slider"><input data-cube="cubeSplit" type="range" min="0" max="1" step="0.05" /><output data-value-for="cubeSplit"></output></span>
+            </label>
+            <label class="row" title="Space between neighbouring cubes">
+              <span>Gaps</span>
+              <span class="slider"><input data-cube="cubeGap" type="range" min="0" max="0.5" step="0.01" /><output data-value-for="cubeGap"></output></span>
+            </label>
+            <label class="row" title="How brightly the gaps glow in the cubes' colours. 0 leaves them black.">
+              <span>Gap glow</span>
+              <span class="slider"><input data-cube="cubeGapGlow" type="range" min="0" max="1.5" step="0.05" /><output data-value-for="cubeGapGlow"></output></span>
+            </label>
+            <label class="row" title="How far cubes can stick out of the wall, as a share of their size">
+              <span>Stick out</span>
+              <span class="slider"><input data-cube="cubeRelief" type="range" min="0" max="1.5" step="0.05" /><output data-value-for="cubeRelief"></output></span>
+            </label>
+            <label class="row" title="How much each cube is turned at random">
+              <span>Tilt</span>
+              <span class="slider"><input data-cube="cubeTilt" type="range" min="0" max="35" step="1" /><output data-value-for="cubeTilt"></output></span>
+            </label>
+            <label class="row" title="Share of cubes left out, leaving holes">
+              <span>Missing</span>
+              <span class="slider"><input data-cube="cubeMissing" type="range" min="0" max="0.7" step="0.02" /><output data-value-for="cubeMissing"></output></span>
+            </label>
+            <div class="buttons">
+              <button id="btn-cube-shuffle" title="A new random arrangement"><i data-lucide="shuffle"></i>Shuffle</button>
+              <button id="btn-cube-layout-reset"><i data-lucide="rotate-ccw"></i>Reset</button>
+            </div>
+          </div>
+        </details>
+
+        <details id="sec-cube-motion" class="fold">
+          <summary><i data-lucide="chevron-right"></i>Movement</summary>
+          <div class="section">
+            <label class="row"><span>Movement</span><select id="in-cube-motion"></select></label>
+            <label class="row" title="How far the cubes move, as a share of each cube's size">
+              <span>Amount</span>
+              <span class="slider"><input data-cube="cubeMotionAmount" data-curve="6" type="range" min="0" max="1" step="0.002" /><output data-value-for="cubeMotionAmount"></output></span>
+            </label>
+            <label class="row">
+              <span>Speed</span>
+              <span class="slider"><input data-cube="cubeMotionSpeed" data-curve="5" type="range" min="0" max="1" step="0.002" /><output data-value-for="cubeMotionSpeed"></output></span>
+            </label>
+            <label class="row" title="How the cubes turn as they move"><span>Rotation</span><select id="in-cube-turn"></select></label>
+            <label class="row" id="cube-turn-amount-row" title="The most a cube turns">
+              <span>Rotation amount</span>
+              <span class="slider"><input data-cube="cubeTurnAmount" data-curve="90" type="range" min="0" max="1" step="0.002" /><output data-value-for="cubeTurnAmount"></output></span>
+            </label>
+          </div>
+        </details>
+      </section>
+
+      <!-- Splat rooms: where the scan sits behind the window -->
+      <details id="sec-placement" class="fold">
+        <summary><i data-lucide="chevron-right"></i>Placement</summary>
+        <div class="section">
+          <button id="btn-adjust" class="wide"><i data-lucide="move"></i>Adjust with mouse</button>
+          <p class="hint">
+            Drag to move, scroll for depth, <kbd>Shift</kbd> drag to turn, <kbd>Alt</kbd> scroll to zoom
+          </p>
+          <label class="row"><span>Window width</span><input id="in-pw" type="number" step="0.1" min="0.01" /></label>
+          <label class="row"><span>Sideways</span><input id="in-px" type="number" step="0.05" /></label>
+          <label class="row"><span>Height</span><input id="in-py" type="number" step="0.05" /></label>
+          <label class="row"><span>Depth</span><input id="in-pz" type="number" step="0.05" /></label>
+          <div class="steppers">
+            <span>Turn</span>
+            <button data-rot="y" data-deg="-2" aria-label="Turn left"><i data-lucide="minus"></i></button>
+            <button data-rot="y" data-deg="2" aria-label="Turn right"><i data-lucide="plus"></i></button>
+            <span>Tilt</span>
+            <button data-rot="x" data-deg="-2" aria-label="Tilt down"><i data-lucide="minus"></i></button>
+            <button data-rot="x" data-deg="2" aria-label="Tilt up"><i data-lucide="plus"></i></button>
+            <span>Roll</span>
+            <button data-rot="z" data-deg="-2" aria-label="Roll left"><i data-lucide="minus"></i></button>
+            <button data-rot="z" data-deg="2" aria-label="Roll right"><i data-lucide="plus"></i></button>
+          </div>
+          <div class="buttons grid-2">
+            <button id="btn-flip" title="Turn the room upside down"><i data-lucide="arrow-up-down"></i>Flip</button>
+            <button id="btn-autofit" title="Guess a placement from where the splats are"><i data-lucide="scan"></i>Auto-fit</button>
+            <button id="btn-reset-placement"><i data-lucide="rotate-ccw"></i>Reset</button>
+            <button id="btn-copy-placement" title="Copy these values, to paste into src/rooms.ts"><i data-lucide="copy"></i>Copy</button>
+          </div>
+        </div>
+      </details>
+
+      <details id="sec-display" class="fold">
+        <summary><i data-lucide="chevron-right"></i>Display and camera</summary>
+        <div class="section">
+          <label class="row"><span>Profile</span><select id="in-profile"></select></label>
+          <div class="buttons">
+            <button id="btn-profile-new"><i data-lucide="copy-plus"></i>Duplicate</button>
+            <button id="btn-profile-delete"><i data-lucide="trash"></i>Delete</button>
+          </div>
+          <label class="row"><span>Name</span><input id="in-profile-name" type="text" /></label>
+          <label class="row"><span>Display diagonal</span><span class="unit"><input id="in-diagonal" type="number" min="5" max="300" step="0.1" /><i>in</i></span></label>
+          <label class="row"><span>Camera field of view</span><span class="unit"><input id="in-fov" type="number" min="30" max="120" step="0.5" /><i>°</i></span></label>
+          <label class="row">
+            <span>Camera sits</span>
+            <select id="in-cam-edge">
+              <option value="top">Above screen</option>
+              <option value="bottom">Below screen</option>
+            </select>
+          </label>
+          <label class="row"><span>Gap to screen edge</span><span class="unit"><input id="in-cam-gap" type="number" min="0" step="0.5" /><i>cm</i></span></label>
+          <label class="row"><span>Right of centre</span><span class="unit"><input id="in-cam-side" type="number" step="1" /><i>cm</i></span></label>
+          <label class="row"><span>In front of screen</span><span class="unit"><input id="in-cam-forward" type="number" step="1" /><i>cm</i></span></label>
+          <label class="row"><span>Tilted upwards</span><span class="unit"><input id="in-cam-tilt" type="number" step="1" /><i>°</i></span></label>
+          <button id="btn-calibrate" class="wide" title="Sit with your eyes 50 cm from the camera, then press">
+            <i data-lucide="crosshair"></i>Calibrate at 50 cm
+          </button>
+        </div>
+      </details>
+
+      <footer class="hud-foot">
+        <div class="toggles">
+          <button id="btn-follow" title="Head-coupled perspective" aria-pressed="true">
+            <i data-lucide="scan-face"></i>Follow head<kbd>P</kbd>
+          </button>
+          <button id="btn-mouse" title="Steer the view with the mouse" aria-pressed="false">
+            <i data-lucide="mouse-pointer-2"></i>Mouse<kbd>M</kbd>
+          </button>
+          <button id="btn-fullscreen" title="Fullscreen">
+            <i data-lucide="maximize"></i>Fullscreen<kbd>F</kbd>
+          </button>
+        </div>
+        <p class="hint"><kbd>H</kbd> hides this panel</p>
+      </footer>
+    </aside>
+
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

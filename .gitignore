@@ -1,0 +1,14 @@
+node_modules
+dist
+.DS_Store
+
+# Copied from node_modules on install (scripts/copy-mediapipe-wasm.mjs)
+public/mediapipe-wasm
+
+# Splat scenes: personal room scans are large and private, and the sample is
+# downloaded with `npm run fetch-sample` rather than redistributed here.
+public/splats/*
+!public/splats/.gitkeep
+
+# Local tool settings
+.claude

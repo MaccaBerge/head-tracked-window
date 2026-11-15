@@ -1,0 +1,56 @@
+# head-tracked-window
+
+Turns a screen into a window. A webcam follows your head and the 3D room behind
+the screen is redrawn from where your eyes are, so it shifts in perspective as
+you move, like looking through a real window. Rooms can be Gaussian splat scans,
+or generated rooms built in code.
+
+Runs in the browser on a laptop or a computer plugged into a TV. One viewer at a
+time.
+
+## Run it
+
+```bash
+npm install
+npm run fetch-sample   # downloads the fireplace sample scene from Spark's examples
+npm run dev
+```
+
+Open the address Vite prints in Chrome and allow the camera. Press **F** for
+fullscreen, then sit about 50 cm from the screen and use **Calibrate at 50 cm**
+under Display and camera.
+
+Keys: **H** hides the panel, **F** fullscreen, **M** steers with the mouse
+instead of the camera, **P** turns head tracking of the view on and off.
+
+## Rooms
+
+- **Grid room**: a wireframe box with depth targets, for checking the effect.
+- **Cube room**: walls of cubes with keyboard-style colour effects, published
+  colour palettes, and adjustable layout and movement.
+- **Splat rooms**: Gaussian splat scenes (`.ply`, `.spz`, `.splat`, `.ksplat`,
+  `.sog`). Drag a file onto the page to add it, or put it in `public/splats/`
+  and add an entry in `src/rooms.ts`. Placement behind the window is adjusted in
+  the panel.
+
+The grid and cube rooms can show you inside them, cut out of the webcam image
+and standing on the floor at a depth that follows your distance.
+
+`public/splats/` is not in the repository. The entries `custom_1` and `custom_2`
+in `src/rooms.ts` are scans of the author's own rooms and load only where those
+files exist.
+
+## How it works
+
+- **Head tracking**: MediaPipe Pose Landmarker in the browser finds the viewer,
+  locks onto one person, and estimates eye position and distance from body
+  proportions (`src/headTracker.ts`).
+- **Off-axis projection**: the camera frustum is fitted to the physical screen
+  from the eye position (`src/offAxis.ts`), with display size and webcam
+  position stored per display profile.
+- **Rendering**: Three.js, with Spark for Gaussian splats.
+
+## Stack
+
+TypeScript, Vite, Three.js, Spark (`@sparkjsdev/spark`), MediaPipe Tasks
+Vision, Geist fonts, lucide icons.
