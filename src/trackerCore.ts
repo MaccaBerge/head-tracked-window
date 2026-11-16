@@ -492,7 +492,10 @@ export class TrackerCore {
       }
       // Same person if they have not jumped further than a few head-widths.
       const headPx = HEAD_WIDTH_M / this.lock.ratio;
-      if (best && bestDist < 2.5 * headPx * (1 + this.misses)) {
+      // The allowance grows while they're missed (a quick lean), but stops at 3.5 head-widths
+      // (about 55 cm): left to grow, it covers the whole picture in a few frames and takes
+      // whoever else is in the room.
+      if (best && bestDist < headPx * Math.min(2.5 * (1 + this.misses), 3.5)) {
         this.lock = best;
         this.misses = 0;
         return best;
