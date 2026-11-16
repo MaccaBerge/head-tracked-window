@@ -2,6 +2,7 @@ import * as THREE from "three";
 import type { NormalizedLandmark } from "@mediapipe/tasks-vision";
 import type { HandTracker } from "./handTracker";
 import type { Room } from "./rooms";
+import { matchHands } from "./particles";
 
 /**
  * A steamed-up bathroom mirror. The screen shows your reflection (the webcam,
@@ -490,7 +491,9 @@ export function createMirror(winW: number, winH: number, settings: MirrorSetting
   window.addEventListener("contextmenu", onMenu);
 
   // Hands: where each was last frame, to wipe along the path between.
-  const lastHand = new Map<string, { x: number; y: number; pose: string; t: number }>();
+  // Per hand slot (see matchHands), the last place it drew from.
+  const lastHand = new Map<number, { x: number; y: number; pose: string; t: number }>();
+  const handSlots = [0, 1].map(() => ({ x: 0, y: 0, seenAt: -Infinity }));
 
   const brush = (finger: boolean) =>
     finger
@@ -523,6 +526,12 @@ export function createMirror(winW: number, winH: number, settings: MirrorSetting
 
   const room: MirrorRoom = {
     group,
+    // The fog (or the particles) stays as it was, stretched to the new window,
+    // rather than starting over when going fullscreen.
+    // shortcut: the shape is stretched, not re-laid out; a room switch lays it out afresh.
+    resize(w) {
+      group.scale.set(w.width / winW, w.height / winH, 1);
+    },
     background: new THREE.Color(0x000000),
     refog() {
       refogQueued = 1;
@@ -555,30 +564,37 @@ export function createMirror(winW: number, winH: number, settings: MirrorSetting
       handRings.forEach((h) => h.set(0, 0, 0, 0));
       const now = performance.now();
       const fresh = now - hands.seenAt < 300;
-      const seen = new Set<string>();
-      (fresh ? hands.hands : []).slice(0, 2).forEach((hand, i) => {
-        // Into mirror coordinates: flipped, and through the same crop as the picture.
-        const x = 0.5 + (1 - hand.x - 0.5) / videoScale.x;
-        const y = 0.5 + (1 - hand.y - 0.5) / videoScale.y;
+      // Into mirror coordinates: flipped, and through the same crop as the picture.
+      const seenHands = (fresh ? hands.hands : []).slice(0, 2).map((hand) => ({
+        hand,
+        x: 0.5 + (1 - hand.x - 0.5) / videoScale.x,
+        y: 0.5 + (1 - hand.y - 0.5) / videoScale.y,
+      }));
+      // Followed by position, not the model's left/right label, which sometimes swaps
+      // and would draw a streak from one hand to the other.
+      matchHands(seenHands, handSlots, now / 1000).forEach((seen, i) => {
+        if (!seen) {
+          lastHand.delete(i);
+          return;
+        }
+        const { hand, x, y } = seen;
+        Object.assign(handSlots[i], { x, y, seenAt: now / 1000 });
         const close = reaching(hand.size);
         const active = close && hand.pose !== "fist";
         const finger = hand.pose === "point";
-        const key = hand.side || String(i);
-        seen.add(key);
-        const before = lastHand.get(key);
+        const before = lastHand.get(i);
         if (active) {
           const joined = before && before.pose === hand.pose && now - before.t < 200;
           // Light smoothing against jitter.
           const sx = joined ? before.x + (x - before.x) * 0.7 : x;
           const sy = joined ? before.y + (y - before.y) * 0.7 : y;
           addStroke(joined ? before.x : sx, joined ? before.y : sy, sx, sy, finger);
-          lastHand.set(key, { x: sx, y: sy, pose: hand.pose, t: now });
+          lastHand.set(i, { x: sx, y: sy, pose: hand.pose, t: now });
         } else {
-          lastHand.set(key, { x, y, pose: "none", t: now });
+          lastHand.set(i, { x, y, pose: "none", t: now });
         }
         if (settings.mirrorShowHands) handRings[i].set(x, y, brush(finger).r * (finger ? 1.6 : 1), active ? 1 : 0.5);
       });
-      for (const key of [...lastHand.keys()]) if (!seen.has(key)) lastHand.delete(key);
 
       // Drops: condensation slowly gathers into drops; big ones run down, clearing a trail.
       if (settings.mirrorDrops > 0 && drops.length < MAX_DROPS && Math.random() < dt * 3 * settings.mirrorDrops) {
