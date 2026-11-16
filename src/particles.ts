@@ -104,6 +104,39 @@ const SHATTER_HOLD = 1.3;
 const SHATTER_RETURN = 1.2;
 
 const POSE = { none: 0, palm: 1, point: 2, fist: 3 } as const;
+/**
+ * How long a fist must look open (or be lost) before it counts as opened and
+ * bursts. The hand model sometimes misreads a fist for a single frame; a real
+ * opening lasts longer than this, and the wait is too short to notice.
+ */
+const OPEN_AFTER_S = 0.15;
+/** A hand slot not matched for this long is free for whichever hand appears next. */
+const SLOT_FORGET_S = 0.5;
+
+/** One of the viewer's two hands, followed from frame to frame by where it is. */
+interface HandSlot {
+  /** Last position, in picture coordinates (0..1, y up, mirrored). */
+  x: number;
+  y: number;
+  seenAt: number;
+  /** When a held fist first looked open, or -1. */
+  openSince: number;
+}
+
+/**
+ * Pairs the hands seen this frame with the two hand slots, so each slot keeps
+ * following the same hand. The hand model doesn't list hands in a steady
+ * order, and a swap would look to a fist like it had opened.
+ */
+function matchHands<T extends { x: number; y: number }>(seen: T[], slots: HandSlot[], clock: number): (T | null)[] {
+  // How far a hand is from a slot; a slot that hasn't been used lately is equally close to anything.
+  const cost = (h: T | undefined, s: HandSlot) =>
+    !h ? 0 : clock - s.seenAt > SLOT_FORGET_S ? 0.5 : Math.hypot(h.x - s.x, h.y - s.y);
+  const [a, b] = seen;
+  const straight = cost(a, slots[0]) + cost(b, slots[1]);
+  const swapped = cost(b, slots[0]) + cost(a, slots[1]);
+  return straight <= swapped ? [a ?? null, b ?? null] : [b ?? null, a ?? null];
+}
 
 /** Shared GLSL: hashes, noise and where a particle belongs. */
 const COMMON_GLSL = /* glsl */ `
@@ -553,6 +586,7 @@ export function createParticles(winW: number, winH: number, settings: ParticleSe
   let nextAutoShatter = -1;
   let trailHead = 0;
   let lastTrailAt = 0;
+  const handSlots: HandSlot[] = [0, 1].map(() => ({ x: 0, y: 0, seenAt: -1e9, openSince: -1 }));
   /** What each hand slot did last frame, to notice a fist opening. */
   const lastPose: number[] = new Array(HANDS).fill(POSE.none);
   const lastHandPos = Array.from({ length: HANDS }, () => new THREE.Vector3());
@@ -660,13 +694,35 @@ export function createParticles(winW: number, winH: number, settings: ParticleSe
       velMaterial.uniforms.uForce.value = settings.partHandForce;
       const now = performance.now();
       const handList = now - hands.seenAt < 300 ? hands.hands.slice(0, 2) : [];
+      // Into picture coordinates: flipped like a mirror, and through the same crop as the figure.
+      const seenHands = handList.map((hand) => ({
+        hand,
+        x: 0.5 + (1 - hand.x - 0.5) / videoScale.x,
+        y: 0.5 + (1 - hand.y - 0.5) / videoScale.y,
+      }));
+      const matched = matchHands(seenHands, handSlots, clock);
       for (let i = 0; i < HANDS; i++) {
         let pose: number = POSE.none;
-        if (i < 2 && handList[i]) {
-          const hand = handList[i];
-          onStatue(0.5 + (1 - hand.x - 0.5) / videoScale.x, 0.5 + (1 - hand.y - 0.5) / videoScale.y, handPos);
-          pose = POSE[hand.pose];
-        } else if (i === 2 && pointer) {
+        if (i < 2) {
+          const seen = matched[i];
+          const slot = handSlots[i];
+          if (seen) {
+            onStatue(seen.x, seen.y, handPos);
+            pose = POSE[seen.hand.pose];
+            Object.assign(slot, { x: seen.x, y: seen.y, seenAt: clock });
+          }
+          // A held fist stays a fist until it has looked open for a moment,
+          // so one misread frame doesn't burst the ball. A lost hand keeps its ball where it was.
+          const opening = lastPose[i] === POSE.fist && pose !== POSE.fist;
+          if (!opening) slot.openSince = -1;
+          else {
+            if (slot.openSince < 0) slot.openSince = clock;
+            if (clock - slot.openSince < OPEN_AFTER_S) {
+              if (!seen) handPos.copy(lastHandPos[i]);
+              pose = POSE.fist;
+            }
+          }
+        } else if (pointer) {
           // The mouse acts where it points from the eye, at the figure's depth.
           const e = eye ?? new THREE.Vector3(0, 0, VIEW_DISTANCE * unit);
           const zt = statueC.z + shared.uRelief.value;
