@@ -588,6 +588,25 @@
         </div>
       </details>
 
+      <details id="sec-cutout" class="fold">
+        <summary><i data-lucide="chevron-right"></i>Cutout</summary>
+        <div class="section">
+          <label class="row" title="The person segmenter is made for cutting people out; the pose model's mask is a side product of finding your joints">
+            <span>Model</span><select id="in-cutout-model"></select>
+          </label>
+          <label class="row" title="Clip the cutout to a body shape drawn around your skeleton, so furniture and wall beside you are left out">
+            <span>Fit to body</span><input id="in-cutout-skeleton" type="checkbox" class="switch" role="switch" />
+          </label>
+          <label class="row" title="How loosely the body shape fits: wider leaves room for loose clothes and big hair">
+            <span>Shape size</span>
+            <span class="slider"><input id="in-cutout-fit" type="range" min="0.6" max="2" step="0.05" /><output data-for="in-cutout-fit"></output></span>
+          </label>
+          <label class="row" title="Draw the body shape over the camera preview">
+            <span>Show shape</span><input id="in-cutout-show" type="checkbox" class="switch" role="switch" />
+          </label>
+        </div>
+      </details>
+
       <details id="sec-display" class="fold">
         <summary><i data-lucide="chevron-right"></i>Display and camera</summary>
         <div class="section">

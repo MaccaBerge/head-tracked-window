@@ -50,7 +50,7 @@ import {
 import { PALETTE_PRESETS } from "./palettes";
 import { createGridRoom } from "./gridRoom";
 import { HandTracker } from "./handTracker";
-import { HeadTracker } from "./headTracker";
+import { CUTOUT_MODELS, HeadTracker, type CutoutModel } from "./headTracker";
 import { createMirror, type MirrorRoom, type MirrorSettings } from "./mirror";
 import {
   PARTICLE_COLOUR_MODES,
@@ -96,9 +96,9 @@ createIcons({
 });
 
 const settings = loadSettings();
-const tracker = new HeadTracker(settings);
 // Hands are only looked for in the rooms that use them (the mirror and the particles).
-const handTracker = new HandTracker(tracker.video);
+const handTracker = new HandTracker();
+const tracker = new HeadTracker(settings, handTracker);
 const profile = (): DisplayProfile => activeProfile(settings);
 
 // ---------- Scene ----------
@@ -503,6 +503,7 @@ function syncHud(): void {
   el.figureDistance.value = String(settings.figureDistanceEffect);
   el.figureDistance.disabled = !settings.showFigure;
   el.figureSize.value = String(settings.figureSize);
+  syncCutoutControls();
   el.figureSize.disabled = !settings.showFigure;
   syncPlacement();
 
@@ -540,6 +541,7 @@ function degrees(v: number): string {
 const sliderReadouts: Record<string, () => string> = {
   "in-depth": () => times(settings.roomDepth),
   "in-figure-size": () => times(settings.figureSize),
+  "in-cutout-fit": () => times(settings.cutoutFit),
   "in-figure-distance": () => settings.figureDistanceEffect.toFixed(2),
   "in-cube-speed": () => times(settings.cubeSpeed),
 };
@@ -1157,6 +1159,40 @@ button("btn-cube-layout-reset").addEventListener("click", () => {
   commit();
 });
 
+// ---------- Cutout ----------
+const cutoutModel = $<HTMLSelectElement>("in-cutout-model");
+for (const model of CUTOUT_MODELS) cutoutModel.add(new Option(model.name, model.id));
+const cutoutSkeleton = input("in-cutout-skeleton");
+const cutoutFit = input("in-cutout-fit");
+const cutoutShow = input("in-cutout-show");
+function syncCutoutControls(): void {
+  cutoutModel.value = settings.cutoutModel;
+  cutoutSkeleton.checked = settings.cutoutSkeleton;
+  cutoutFit.value = String(settings.cutoutFit);
+  cutoutFit.disabled = !settings.cutoutSkeleton;
+  cutoutShow.checked = settings.cutoutShowShape;
+  cutoutShow.disabled = !settings.cutoutSkeleton;
+}
+// All read live by the tracker each frame.
+cutoutModel.addEventListener("change", () => {
+  settings.cutoutModel = cutoutModel.value as CutoutModel;
+  saveSettings(settings);
+  cutoutModel.blur();
+});
+cutoutSkeleton.addEventListener("change", () => {
+  settings.cutoutSkeleton = cutoutSkeleton.checked;
+  syncCutoutControls();
+  saveSettings(settings);
+});
+cutoutFit.addEventListener("input", () => {
+  settings.cutoutFit = parseFloat(cutoutFit.value);
+  saveSettings(settings);
+});
+cutoutShow.addEventListener("change", () => {
+  settings.cutoutShowShape = cutoutShow.checked;
+  saveSettings(settings);
+});
+
 el.figureSize.addEventListener("input", () => {
   settings.figureSize = parseFloat(el.figureSize.value);
   saveSettings(settings);
@@ -1408,6 +1444,12 @@ function drawMask(ctx: CanvasRenderingContext2D, w: number, h: number): void {
     mctx.putImageData(img, 0, 0);
   }
   ctx.drawImage(maskCanvas, 0, 0, w, h);
+  // The body shape the mask is clipped to, as a faint veil.
+  if (settings.cutoutSkeleton && settings.cutoutShowShape && tracker.gateImage) {
+    ctx.globalAlpha = 0.22;
+    ctx.drawImage(tracker.gateImage, 0, 0, w, h);
+    ctx.globalAlpha = 1;
+  }
 }
 
 function drawPreview(): void {
@@ -1501,9 +1543,14 @@ function updateHud(now: number): void {
   el.cameraBtn.hidden = !canStart;
   if (canStart) el.cameraLabel.textContent = tracker.status === "idle" ? "Start camera" : "Try again";
   const grid = isBoxRoom(currentConfig());
-  el.cutoutLabel.hidden = el.cutout.hidden = !grid;
-  if (grid) {
-    el.cutout.textContent = settings.showFigure ? `${tracker.cutoutInfo}, ${figure.state}` : "Off";
+  const particles = currentConfig().type === "particles";
+  el.cutoutLabel.hidden = el.cutout.hidden = !grid && !particles;
+  if (grid || particles) {
+    el.cutout.textContent = particles
+      ? tracker.cutoutInfo
+      : settings.showFigure
+        ? `${tracker.cutoutInfo}, ${figure.state}`
+        : "Off";
     el.cutout.title = el.cutout.textContent;
   }
   drawPreview();

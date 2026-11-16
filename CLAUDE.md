@@ -56,10 +56,20 @@ npm run build          # type check + production build
   view even with Follow head off.
 - Add a room: a config type and entry in `ROOMS` (`rooms.ts`), a branch in
   `rebuild()` (`main.ts`), its panel section shown or hidden in `syncHud()`.
-- **Tracking**: `headTracker.ts` (pose model, sticky lock on one person,
-  OneEuro filtering, optional person cutout). `handTracker.ts` (hand model,
-  palm / point / fist) runs only in the mirror and particle rooms. Both
-  lazy-load MediaPipe. The particle room also turns on the person cutout.
+- **Tracking** runs in a module worker (`trackerWorker.ts`, logic in
+  `trackerCore.ts`, messages in `trackerMessages.ts`). `headTracker.ts` is the
+  page side: it runs the camera, sends each new frame while the worker is free
+  (skipping the rest) and copies results into the same fields as before
+  (`head`, `body`, `cutout`, ...). The worker does the pose model (sticky lock
+  on one person, OneEuro filtering), the optional person cutout (segmenter mask
+  clipped to a body shape from the skeleton in `bodyGate.ts`, then
+  `maskCleaner.ts`; the frame comes back with the mask so they match) and the
+  hand model, which fills in `handTracker.ts` (palm / point / fist) in the
+  mirror and particle rooms. The particle room also turns on the cutout.
+- MediaPipe in a module worker: `forVisionTasks(path, true)` loads the ES
+  module Wasm loader, which the browser runs only once, so `trackerCore.ts`
+  keeps its factory and puts it back before creating each model, one at a time.
+  Worker code can't touch the DOM (use `OffscreenCanvas`).
 - Splat rooms lazy-load Spark; keep heavy libraries out of the first download.
 
 ## Settings and panel

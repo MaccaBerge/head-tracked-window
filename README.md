@@ -72,10 +72,17 @@ files exist.
 
 - **Head tracking**: MediaPipe Pose Landmarker in the browser finds the viewer,
   locks onto one person, and estimates eye position and distance from body
-  proportions (`src/headTracker.ts`). In the mirror and particle rooms,
+  proportions. Tracking runs in a web worker, so the room keeps drawing at the
+  display's rate however long the models take (`src/trackerWorker.ts`,
+  `src/trackerCore.ts`). In the mirror and particle rooms,
   MediaPipe Hand Landmarker tells an open hand, a pointing finger and a fist
   apart (`src/handTracker.ts`). The particle room runs its simulation on the
   GPU in float textures (`src/particles.ts`).
+- **Person cutout**: MediaPipe's multiclass selfie segmenter finds the person
+  (the pose model's own mask is a fallback, switchable under Cutout in the
+  panel). The mask is clipped to a body shape drawn around the tracked
+  skeleton, so furniture and wall beside you are left out (`src/bodyGate.ts`),
+  then steadied over time (`src/maskCleaner.ts`).
 - **Off-axis projection**: the camera frustum is fitted to the physical screen
   from the eye position (`src/offAxis.ts`), with display size and webcam
   position stored per display profile.
