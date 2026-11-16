@@ -126,11 +126,15 @@ interface HandSlot {
 /**
  * Pairs the hands seen this frame with the two hand slots, so each slot keeps
  * following the same hand. The hand model doesn't list hands in a steady
- * order, and a swap would look to a fist like it had opened.
+ * order, and a swap would look to a fist like it had opened. `clock` is in seconds.
  */
-function matchHands<T extends { x: number; y: number }>(seen: T[], slots: HandSlot[], clock: number): (T | null)[] {
+export function matchHands<T extends { x: number; y: number }>(
+  seen: T[],
+  slots: { x: number; y: number; seenAt: number }[],
+  clock: number,
+): (T | null)[] {
   // How far a hand is from a slot; a slot that hasn't been used lately is equally close to anything.
-  const cost = (h: T | undefined, s: HandSlot) =>
+  const cost = (h: T | undefined, s: { x: number; y: number; seenAt: number }) =>
     !h ? 0 : clock - s.seenAt > SLOT_FORGET_S ? 0.5 : Math.hypot(h.x - s.x, h.y - s.y);
   const [a, b] = seen;
   const straight = cost(a, slots[0]) + cost(b, slots[1]);
@@ -620,6 +624,12 @@ export function createParticles(winW: number, winH: number, settings: ParticleSe
 
   const room: ParticleRoom = {
     group,
+    // The fog (or the particles) stays as it was, stretched to the new window,
+    // rather than starting over when going fullscreen.
+    // shortcut: the shape is stretched, not re-laid out; a room switch lays it out afresh.
+    resize(w) {
+      group.scale.set(w.width / winW, w.height / winH, 1);
+    },
     // Grains thrown out of the glass would fill the view as blurry blobs.
     clipAtWindow: true,
     background: new THREE.Color(0x020306),

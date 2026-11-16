@@ -235,6 +235,11 @@ function commit(): void {
 let rebuildQueued = false;
 function commitSoon(): void {
   saveSettings(settings);
+  rebuildSoon();
+}
+
+/** Rebuilds at most once per frame, however many times it's asked. */
+function rebuildSoon(): void {
   if (rebuildQueued) return;
   rebuildQueued = true;
   requestAnimationFrame(() => {
@@ -1592,7 +1597,8 @@ function frame(now: number): void {
   requestAnimationFrame(frame);
 }
 
-window.addEventListener("resize", rebuild);
+// Dragging the window edge fires many of these a frame.
+window.addEventListener("resize", rebuildSoon);
 // Moving the window changes where it sits relative to the webcam.
 setInterval(() => (win = measureWindow(profile())), 1000);
 
