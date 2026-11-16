@@ -261,9 +261,12 @@ function setPlacement(p: Placement): void {
 function autoFit(): void {
   const target = splatRoom;
   if (!target) return;
-  void target.suggestPlacement().then((p) => {
-    if (splatRoom === target) setPlacement(p);
-  });
+  void target.suggestPlacement().then(
+    (p) => {
+      if (splatRoom === target) setPlacement(p);
+    },
+    () => {}, // The room couldn't load; the pill already says so.
+  );
 }
 
 let adjusting = false;
@@ -1497,7 +1500,7 @@ function updateHud(now: number): void {
   const fetchingRenderer = currentConfig().type === "splat" && !splatModule;
   const isLoading = loading !== undefined || fetchingRenderer;
   if (isLoading !== wasLoading) {
-    announce(isLoading ? "Loading room" : "Room loaded");
+    announce(isLoading ? "Loading room" : room?.failed ? "Couldn't load this room" : "Room loaded");
     wasLoading = isLoading;
   }
   const pill =
@@ -1507,7 +1510,9 @@ function updateHud(now: number): void {
         ? "Loading splat renderer"
         : loading !== undefined
           ? `Loading room ${Math.round(loading * 100)}%`
-          : "";
+          : room?.failed
+            ? "Couldn't load this room"
+            : "";
   el.loading.hidden = pill === "";
   if (pill) el.loading.textContent = pill;
   if (!settings.showHud) return;

@@ -28,6 +28,11 @@ export function createSplatRoom(config: SplatRoomConfig, placement: Placement, w
     },
   });
   group.add(mesh);
+  // Without this a missing or broken file would show "Loading room 0%" forever.
+  mesh.initialized.catch(() => {
+    room.loading = undefined;
+    room.failed = true;
+  });
   let currentWin = win;
 
   const apply = () => {

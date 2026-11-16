@@ -12,6 +12,8 @@ export interface Room {
   background?: Color;
   /** Download progress from 0 to 1 while the room is loading; absent once ready. */
   loading?: number;
+  /** Set when the room couldn't be loaded (a missing or broken file). */
+  failed?: boolean;
   /**
    * Called every frame; rooms can animate here.
    * @param eye Where the view is drawn from (window space, metres). Fixed straight ahead when Follow head is off.
