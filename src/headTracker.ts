@@ -142,6 +142,13 @@ export class HeadTracker {
       return;
     }
     this.busy = false;
+    if (message.type === "skipped") {
+      // Shown in the panel; tracking carries on with the next frame.
+      this.status = "searching";
+      this.error = `tracking: ${message.error}`;
+      return;
+    }
+    this.error = "";
     this.apply(message);
   }
 

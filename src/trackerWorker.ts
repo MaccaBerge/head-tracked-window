@@ -30,7 +30,15 @@ self.onmessage = async (event: MessageEvent<ToWorker>) => {
     message.frame.close();
     return;
   }
-  const result = await core.process(message.frame, message.now, message.options);
+  let result;
+  try {
+    result = await core.process(message.frame, message.now, message.options);
+  } catch (e) {
+    // Without a reply the page would wait for this frame forever and tracking would freeze.
+    message.frame.close();
+    self.postMessage({ type: "skipped", error: e instanceof Error ? e.message : String(e) });
+    return;
+  }
   // The frame, mask and body shape move to the page rather than being copied.
   const transfer: Transferable[] = [];
   if (result.cutout) transfer.push(result.cutout.frame, result.cutout.mask.buffer);

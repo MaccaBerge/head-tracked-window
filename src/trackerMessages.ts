@@ -60,4 +60,6 @@ export interface FrameResult {
 export type FromWorker =
   | { type: "ready" }
   | { type: "failed"; error: string }
+  /** One frame threw; the next one is tried as usual. */
+  | { type: "skipped"; error: string }
   | FrameResult;
